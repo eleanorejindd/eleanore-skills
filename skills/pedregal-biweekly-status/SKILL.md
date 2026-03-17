@@ -157,7 +157,8 @@ Use this section shape, which matches the live doc format:
   - [item with one-line explanation of what launched or changed]
   - [item with one-line explanation]
 - **Top Risk/Blocker:**
-  - [risk with context and current path forward]
+  - [risk description with context]
+    - **Mitigation:** [current path forward or interim workaround]
 - **Key Decision:**
   - [decision or active direction under discussion]
 - **Link **to a more detailed tracker (if any) : JIRA plan 10017 / scenario 10224 / view 12892
@@ -183,6 +184,9 @@ Rules for synthesis:
 - Keep each bullet specific enough that a reader can understand the outcome quickly
 - For shipped wins, include a short one-line explanation of what launched, changed, or was
   unblocked instead of listing only the item name
+- For every Top Risk/Blocker bullet, always include a **Mitigation:** sub-bullet describing
+  the current path forward or interim workaround; if no mitigation is known, write
+  "Mitigation: none identified yet — under discussion"
 
 ### 6. Review with Yi Jin before any write
 
