@@ -1,0 +1,10 @@
+---
+description: Create a branch before pushing code changes
+alwaysApply: true
+---
+
+# Branch Before Push
+
+- If a code change will be pushed to a remote repository, create or switch to a non-`main` branch first.
+- Do not push code changes directly from `main` unless the user explicitly asks for that.
+- Before making a push-related commit flow, check the current branch and confirm whether to use it or create a new one.
