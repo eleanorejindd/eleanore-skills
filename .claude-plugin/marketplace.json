@@ -1,0 +1,9 @@
+{
+  "name": "eleanore-skills",
+  "owner": {
+    "name": "Eleanore Jin"
+  },
+  "plugins": [
+    "pedregal-biweekly-status"
+  ]
+}

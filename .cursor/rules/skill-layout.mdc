@@ -1,0 +1,11 @@
+---
+description: Store canonical skills under skills and symlink into .cursor/skills
+alwaysApply: true
+---
+
+# Skill Layout
+
+- Keep the source of truth for repo-local skills under `skills/{skill-name}/`.
+- When a Cursor-discoverable copy is needed, create a directory symlink in `.cursor/skills/{skill-name}` pointing to `skills/{skill-name}`.
+- Do not duplicate skill files between `skills/` and `.cursor/skills/`.
+- Prefer concise skill names without prefixes like `dmf-` unless the user explicitly asks to keep the prefix.

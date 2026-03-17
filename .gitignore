@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+*.whl
+
+# uv
+.uv/
+uv.lock
+
+# Secrets — never commit these
+.env
+.env.*
+secrets.json
+*_token.txt
+*credentials*.json
+.claude/settings.local.json
+
+# macOS
+.DS_Store
+
+# Editor
+.idea/
+.vscode/
+*.swp
+
+# Claude runtime (caches, session state)
+.claude/cache/

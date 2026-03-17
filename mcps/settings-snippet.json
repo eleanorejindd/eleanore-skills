@@ -1,0 +1,120 @@
+{
+  "_comment": [
+    "Paste the 'mcpServers' block into ~/.claude/settings.json.",
+    "Replace all <placeholder> values with real credentials.",
+    "For local MCPs (google-workspace, grafana, dd-etl), run the setup steps in mcps/README.md first.",
+    "Reference: https://github.com/doordash/data-agents-toolkit"
+  ],
+  "mcpServers": {
+
+    "_section_hosted_vpn_only": "── Hosted MCPs: zero setup, just need VPN ──────────────────────",
+
+    "observability-mcp": {
+      "type": "http",
+      "url": "https://cybertron-service-gateway-mcp.doordash.team/observability-mcp/mcp"
+    },
+    "ReliabilityMCP": {
+      "type": "http",
+      "url": "https://cybertron-service-gateway-mcp.doordash.team/reliability-platform-mcp-server/mcp"
+    },
+    "ComputeMCP": {
+      "type": "http",
+      "url": "https://cybertron-service-gateway-mcp.doordash.team/compute-mcp/mcp"
+    },
+    "InfraMCP": {
+      "type": "http",
+      "url": "https://cybertron-service-gateway-mcp.doordash.team/infra-graph/mcp"
+    },
+    "ai-assist": {
+      "url": "http://ai-assist-mcp.service.prod.ddsd:8000/sse"
+    },
+    "glean": {
+      "type": "http",
+      "url": "https://doordash-be.glean.com/mcp/default"
+    },
+    "datahub": {
+      "type": "http",
+      "url": "https://cybertron-service-gateway-mcp.doordash.team/datahub/mcp"
+    },
+    "experimentation": {
+      "type": "http",
+      "url": "https://cybertron-service-gateway-mcp.doordash.team/experimentation/mcp"
+    },
+
+    "_section_hosted_auth": "── Hosted MCPs: need token or OAuth ────────────────────────────",
+
+    "data-mobility": {
+      "type": "http",
+      "url": "http://localhost:8080/mcp"
+    },
+    "user-github": {
+      "command": "<path-to-node>",
+      "args": [
+        "<path-to-npx>",
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "_note": "Find paths with: which node && which npx (use nvm paths if using nvm)",
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<your-github-pat>"
+      }
+    },
+    "atlassian": {
+      "command": "<path-to-node>",
+      "args": [
+        "<path-to-npx>",
+        "-y",
+        "mcp-remote",
+        "https://mcp.atlassian.com/v1/sse"
+      ]
+    },
+    "slack": {
+      "url": "https://mcp.slack.com/mcp",
+      "auth": {
+        "CLIENT_ID": "<your-slack-client-id>"
+      },
+      "headers": {}
+    },
+    "chronosphere": {
+      "type": "http",
+      "url": "https://doordash.chronosphere.io/api/mcp/mcp",
+      "headers": {
+        "API-Token": "<your-chronosphere-pat>"
+      }
+    },
+    "granola": {
+      "type": "http",
+      "url": "https://mcp.granola.ai/mcp"
+    },
+
+    "_section_local": "── Local MCPs: build and run locally ───────────────────────────",
+
+    "google-workspace": {
+      "command": "node",
+      "args": [
+        "~/Projects/data-agents-toolkit/mcps/google-workspace/dist/index.js"
+      ],
+      "_note": "Run setup-gcloud.sh first: cd ~/Projects/data-agents-toolkit/mcps/google-workspace && ./setup-gcloud.sh"
+    },
+    "grafana": {
+      "command": "node",
+      "args": [
+        "<path-to-data-agents-toolkit>/mcps/grafana/dist/index.js"
+      ],
+      "env": {
+        "GRAFANA_URL": "https://grafana.doordash.team"
+      }
+    },
+    "dd-etl": {
+      "command": "<path-to-conda-envs>/dd-etl/bin/python",
+      "args": [
+        "<path-to-data-agents-toolkit>/mcps/dd-etl/src/mcp_server_fastmcp.py"
+      ],
+      "env": {
+        "PYTHONPATH": "<path-to-data-agents-toolkit>/mcps/dd-etl/src",
+        "DD_ETL_USERNAME": "<your-dd-etl-username>",
+        "AWS_PROFILE": "okta-prod-engineer"
+      }
+    }
+  }
+}

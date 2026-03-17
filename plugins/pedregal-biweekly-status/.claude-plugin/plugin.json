@@ -1,0 +1,8 @@
+{
+  "name": "pedregal-biweekly-status",
+  "description": "Generates the Project Pedregal Data Platform bi-weekly summary from Slack, Jira, and the standing Google Doc format.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Eleanore Jin"
+  }
+}

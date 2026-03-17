@@ -1,0 +1,8 @@
+{
+  "name": "plugin-name",
+  "description": "One sentence: what this plugin does and when to use it.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Eleanore Jin"
+  }
+}
