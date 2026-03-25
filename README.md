@@ -121,5 +121,6 @@ See `mcps/README.md` for per-MCP setup instructions (auth, tokens, etc.).
 | `google-docs` | Skill | Read, search, and update Google Docs with local OAuth-backed scripts |
 | `google-sheets` | Skill | Read, create, and update Google Sheets with local OAuth-backed scripts |
 | `pedregal-biweekly-status` | Plugin | Plugin wrapper for the Pedregal bi-weekly status workflow |
+| `pedregal-mob-weekly-update` | Skill | Posts weekly MOB issue tracker status to #pedregal-data-mob: closed/in-progress/open Jira tickets and unfiled doc items |
 
 Update this table as you add things.
