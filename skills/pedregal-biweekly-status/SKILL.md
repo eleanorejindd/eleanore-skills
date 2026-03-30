@@ -17,8 +17,12 @@ reviewed with Yi Jin before any Google Doc write.
 
 ## Key references
 
-- Google Doc: `1S5N4MZjzuKr4s94heI2bjS2cIJdISwl93tDit8ip2ec`
+- **Format reference doc** (read only, never write here): `1S5N4MZjzuKr4s94heI2bjS2cIJdISwl93tDit8ip2ec`
 - Google Doc bookmark fallback: `id.60sej5duj5vk`
+- **Staging doc** (write first for Yi Jin to review): `1EiB37iGEQpxVF7HDSXQt0H1CVVa3IHigjXz3GHgTzF8`, tab `t.0`
+  ([Matan's Pedregal Review](https://docs.google.com/document/d/1EiB37iGEQpxVF7HDSXQt0H1CVVa3IHigjXz3GHgTzF8/edit?tab=t.0))
+- **Final doc** (write only after explicit approval): `1S5N4MZjzuKr4s94heI2bjS2cIJdISwl93tDit8ip2ec`, latest-dated tab
+  ([Pedregal Foundations Decisions & Updates](https://docs.google.com/document/d/1S5N4MZjzuKr4s94heI2bjS2cIJdISwl93tDit8ip2ec))
 - Slack channel: `#pedregal-data-platform-comms`
 - Jira plan URL: `https://doordash.atlassian.net/jira/plans/10017/scenarios/10224/timeline?vid=12892`
 - Coverage window: last 14 days unless Yi Jin asks for a different range
@@ -47,11 +51,11 @@ If she provides links or ticket IDs, keep them and incorporate them into the sou
 
 ### 2. Read the reference doc format
 
-Use the `googleDoc` MCP to read the doc:
+Use the `googleDoc` MCP to read the format reference doc (read only — do not write here):
 
 1. List tabs to identify the latest-dated one:
    - `googleDoc` action `listTabs`, documentId `1S5N4MZjzuKr4s94heI2bjS2cIJdISwl93tDit8ip2ec`
-   - Pick the tab with the most recent date (currently Tab 2: "Mar 18, 2026", ID `t.ce57oeba6jza`)
+   - Pick the tab with the most recent date (currently Tab 2: "April 1, 2026", ID `t.3ca9bdm8t79d`)
 2. Read the `Data Platform` section from that tab:
    - `googleDoc` action `read`, documentId `1S5N4MZjzuKr4s94heI2bjS2cIJdISwl93tDit8ip2ec`, tabId `<latest tab ID>`, format `markdown`
 
@@ -83,10 +87,15 @@ service.documents().get(documentId=DOC_ID, includeTabsContent=True)
 
 ### 3. Gather Slack evidence
 
-Use `slack_search_public` against `#pedregal-data-platform-comms` for the last 14 days.
-Prefer several targeted searches over one broad search.
+Search the following channels for the last 14 days. Prefer several targeted searches over one broad search.
 
-Recommended query patterns:
+**Primary channel:** `#pedregal-data-platform-comms` (ID: `C0AKD25LHTR`)
+
+**Additional channels to always check:**
+- `#pedregal-server-side-event-poc` (ID: `C0ADRL55KAT`) — server-side event stitching POC weekly updates; read with `slack_read_channel` to get the latest weekly status message
+- `#pedregal-data-ml-track` (ID: `C08Q1G5C55Y`) — ML logging and MLP coordination; search for timeline and milestone updates
+
+Recommended query patterns for `#pedregal-data-platform-comms`:
 
 - `in:#pedregal-data-platform-comms after:YYYY-MM-DD shipped`
 - `in:#pedregal-data-platform-comms after:YYYY-MM-DD release`
@@ -148,21 +157,49 @@ For each item you keep, capture:
 Produce a concise draft that reflects the document's existing format. Prefer factual,
 source-backed bullets over narrative prose.
 
-Use this section shape, which matches the live doc format:
+Use this section shape, which exactly matches the live doc format.
 
-```markdown
-## **Data Platform**
-- **Status against H1 Goals:** 🟡 [one-line overall framing]
-- **Key Wins & customer value shipped :**
-  - [item with one-line explanation of what launched or changed]
-  - [item with one-line explanation]
-- **Top Risk/Blocker:**
-  - [risk description with context]
-    - **Mitigation:** [current path forward or interim workaround]
-- **Key Decision:**
-  - [decision or active direction under discussion]
-- **Link **to a more detailed tracker (if any) : JIRA plan 10017 / scenario 10224 / view 12892
+**Critical format rules:**
+- No markdown bullet dashes (`-`) or list syntax — all content is plain prose paragraphs
+- Wins use emoji prefix directly: `🟢 Bold title, description` (comma after title, then plain text)
+- Blockers: plain text title followed immediately by description on the same line;
+  `Mitigation:` on the next line as its own paragraph
+- Key Decisions: plain text, one paragraph per decision
+- Section labels (`Status against H1 Goals:`, `Key Wins & customer value shipped :`,
+  `Top Risk/Blocker:`, `Key Decision:`, `Link to a more detailed tracker`) are their own
+  paragraph lines with no punctuation after the colon except a space
+
+**Indentation values:**
+- Section headers (e.g. `Top Risk/Blocker:`, `Key Wins & customer value shipped :`): `indentStart: 0pt`
+- Win items (`🟢 …`), Blocker items (`• …`), Decision items (`• …`): `indentStart: 36pt`
+- Mitigation lines: `indentStart: 36pt` **plus** a leading `\t` tab character inserted at the start of the paragraph text.
+  The tab jumps to the next tab stop (~72pt), placing mitigations visually 1 level under their parent blocker.
+  Use `googleDocEdit insertText` with `\t` at the paragraph start index (insert bottom-to-top to avoid index shifts).
+
 ```
+[Date] — Data Platform Update
+| generated by agent skill
+Status against H1 Goals: 🟡 [one-line overall framing]
+Key Wins & customer value shipped :
+🟢 [Bold win title], [one-line explanation of what launched or changed]
+🟢 [Bold win title], [one-line explanation]
+🟡 [Bold win title] [explanation for partial/in-progress item]
+Top Risk/Blocker:
+[Blocker title] — [description with context]
+Mitigation: [current path forward or interim workaround]
+[Blocker title] — [description with context]
+Mitigation: [current path forward or interim workaround]
+Key Decision:
+[Decision framing] — [description]
+[Decision framing] — [description]
+Link to a more detailed tracker (if any): JIRA plan 10017 / scenario 10224 / view 12892
+
+---
+
+```
+
+The trailing `---` separator + two blank lines divides this entry from the previous one
+when the staging doc accumulates multiple runs.
 
 **Do not include Slack or Jira URLs in the doc content.** Keep them in the working draft
 for traceability only; strip them before writing to the doc.
@@ -187,6 +224,9 @@ Rules for synthesis:
 - For every Top Risk/Blocker bullet, always include a **Mitigation:** sub-bullet describing
   the current path forward or interim workaround; if no mitigation is known, write
   "Mitigation: none identified yet — under discussion"
+- For Key Decisions, combine related infra/process changes into a single bullet — e.g.,
+  "manifests moved to Pretzel repo" and "CI reduced to <10s, CD reduced to <30s" are one item,
+  not two separate bullets
 
 ### 6. Review with Yi Jin before any write
 
@@ -203,29 +243,69 @@ If Yi Jin gives extra context:
 
 Only proceed to writing after she explicitly approves the final draft.
 
-### 7. Write to the Google Doc only with confirmation
+### 7. Two-step write: staging doc → final doc
 
-Before any edit, show:
+#### Step 7a: Write to staging doc (no confirmation needed beyond chat approval)
 
-- Action: update the Pedregal status doc
-- Target: document ID `1S5N4MZjzuKr4s94heI2bjS2cIJdISwl93tDit8ip2ec`, latest-dated tab,
-  `Data Platform` section
-- Content: the exact final summary text to be inserted
+The staging doc is a running log — **new entries always go at the top**, so the most recent
+update is always the first thing you see.
 
-Then ask for confirmation.
+After Yi Jin approves the draft in chat:
 
-If approved:
+1. Show a brief preview:
+   - **Action:** prepend new entry to staging doc
+   - **Target:** `1EiB37iGEQpxVF7HDSXQt0H1CVVa3IHigjXz3GHgTzF8`, tab `t.0`
+   - **Content:** the final draft including a date header
+2. Ask: **"Shall I write this to the staging doc for your review?"**
+3. If yes, use `googleDocEdit` MCP with `insertText` at index `1` (always index 1 to prepend):
+   - action: `insertText`
+   - documentId: `1EiB37iGEQpxVF7HDSXQt0H1CVVa3IHigjXz3GHgTzF8`
+   - tabId: `t.0`
+   - index: `1`
+   - text: the full content block, starting with the date header:
+     ```
+     ## [Date] — Data Platform Update
+     | generated by agent skill
+     [content]
 
-1. Use `googleDocEdit` MCP to write to the doc:
-   - action: `insertText` or `append` targeting the `Data Platform` section in the latest tab
+     ---
+
+     ```
+   - The trailing `---` separator visually divides entries from previous ones
+   - Do not include Slack or Jira URLs in the written content
+4. Apply hyperlinks to any URLs in the doc using `googleDocFormat textStyle` with `linkUrl` + `textToFind`:
+   - Always linkify `ops.doordash.team/data-control-plane` → `https://ops.doordash.team/data-control-plane`
+   - Always linkify `JIRA plan 10017 / scenario 10224 / view 12892` → `https://doordash.atlassian.net/jira/plans/10017/scenarios/10224/timeline?vid=12892`
+   - Linkify any other plain-text URLs present in the written content
+5. Share the staging doc link and ask Yi Jin to review it:
+   > "Draft is in the staging doc — please review at
+   > https://docs.google.com/document/d/1EiB37iGEQpxVF7HDSXQt0H1CVVa3IHigjXz3GHgTzF8/edit?tab=t.0
+   > Let me know when you're ready to publish to the final doc, or if you want changes first."
+
+#### Step 7b: Write to final doc only after explicit approval
+
+Only proceed here when Yi Jin explicitly says "looks good", "publish it", "write to the main doc", or similar.
+
+1. Show a final confirmation prompt:
+   - **Action:** publish to the Pedregal Foundations Decisions & Updates doc
+   - **Target:** `1S5N4MZjzuKr4s94heI2bjS2cIJdISwl93tDit8ip2ec`, latest-dated tab (`Data Platform` section)
+   - **Content:** same content as the staging doc (or updated version if Yi Jin made edits)
+2. Ask: **"Confirmed — write this to the final Pedregal status doc?"** and wait for explicit yes.
+3. If approved, use `googleDocEdit` MCP:
+   - action: `insertText` or `append` targeting the `Data Platform` section
    - documentId: `1S5N4MZjzuKr4s94heI2bjS2cIJdISwl93tDit8ip2ec`
-   - tabId: latest tab ID (from step 2)
-2. Preserve the `| generated by agent skill` marker already in the section
-3. Do not include Slack or Jira URLs in the written content
-4. Confirm success with the doc link
+   - tabId: latest tab ID (from step 2 of the workflow)
+   - Preserve the `| generated by agent skill` marker in the section
+   - Do not include Slack or Jira URLs in the written content
+4. Confirm success with the doc link.
 
-If the MCP write fails, fall back to the local OAuth script:
+If any MCP write fails, fall back to the local OAuth script:
 ```bash
+# Staging doc
+python3 skills/google-docs/scripts/update_doc.py \
+  1EiB37iGEQpxVF7HDSXQt0H1CVVa3IHigjXz3GHgTzF8 append "Data Platform" "<content>"
+
+# Final doc
 python3 skills/google-docs/scripts/update_doc.py \
   1S5N4MZjzuKr4s94heI2bjS2cIJdISwl93tDit8ip2ec \
   insert-after-heading "Data Platform" "<content>"
