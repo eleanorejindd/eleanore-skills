@@ -122,5 +122,6 @@ See `mcps/README.md` for per-MCP setup instructions (auth, tokens, etc.).
 | `google-sheets` | Skill | Read, create, and update Google Sheets with local OAuth-backed scripts |
 | `pedregal-biweekly-status` | Plugin | Plugin wrapper for the Pedregal bi-weekly status workflow |
 | `pedregal-mob-weekly-update` | Skill | Posts weekly MOB issue tracker status to #pedregal-data-mob: closed/in-progress/open Jira tickets and unfiled doc items |
+| `daily-slack-triage` | Skill | End-of-day Slack DM digest of unresolved tagged threads, ranked by urgency (P0/P1/P2) and sub-grouped by category (Pedregal launch blocker, reliability, Pedregal bug, support escalation, other) |
 
 Update this table as you add things.
