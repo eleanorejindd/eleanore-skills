@@ -1,236 +1,325 @@
 ---
 name: daily-slack-triage
 description: >
-  Scans Slack for threads where Yi Jin (Eleanore) has been @-mentioned in the
-  last 3 days but hasn't replied, or replied but new follow-ups have landed,
-  then posts a single prioritized digest to her own Slack DM. Ranks by urgency
-  (P0 / P1 / P2) first, then sub-groups by category: Pedregal launch blocker
-  (dependencies from Eradinus, Nexus, or other platform teams), reliability
-  issue, Pedregal feature gap / bug, support escalation, or other. Use when
-  Yi Jin says "run my daily slack triage", "triage my slack", "what slack
-  threads need my attention", "send me my slack digest", "what did I miss in
-  slack", "who is waiting on me in slack", or schedules this as a recurring
-  task (intended to run weekdays at 5pm PT). Does not reply to any source
-  thread — the only outbound action is the self-DM summary.
+  Builds a persistent, checkable Slack Canvas digest of unresolved items from
+  the past 1 day (24 hours) — public-channel @-mentions, DMs, group DMs, and
+  threads Yi Jin (Eleanore, U02N4K114AK) has participated in where new activity
+  has landed since her last reply. Posts / updates a single Canvas in her
+  self-DM where she checks items off; next run reads the canvas first and
+  skips anything already checked. Ranks by urgency (P0 / P1 / P2) then
+  sub-groups by category: Pedregal launch blocker (Eradinus / Nexus / other
+  platform-team deps), reliability issue, Pedregal feature gap / bug, support
+  escalation, or other. The 1-day lookback applies uniformly to every category
+  and every priority — nothing older than 24h enters the digest, regardless of
+  urgency. Does not reply to or react on any source thread. Use when Yi Jin
+  says "run my daily slack triage", "triage my slack", "what slack threads
+  need my attention", "send me my slack digest", "who is waiting on me", or
+  schedules this as a recurring weekday 5pm PT task.
 ---
 
 # Daily Slack Triage
 
-A single end-of-day Slack DM that tells Yi Jin which tagged threads still need
-her attention, ranked by urgency, so nothing falls through the cracks before
-she signs off. Specifically tuned to surface Pedregal launch blockers coming
-from platform dependencies (Eradinus, Nexus) alongside general support,
-reliability, and bug signals.
+A single end-of-day **interactive Canvas** in Yi Jin's self-DM that tracks
+which tagged threads still need her attention. She ticks items off inside
+Slack; subsequent runs respect those checks and only surface new unresolved
+activity.
 
 ## When to use
 
-- **Recurring end-of-day check** — the intended default; a scheduled run at
-  5pm PT weekdays produces the digest.
+- **Recurring end-of-day check** — the intended default; scheduled weekdays
+  at 5pm PT.
 - **Ad-hoc catch-up** — "what did I miss today", "who's waiting on me",
-  "triage my slack" outside the scheduled time.
-- **After extended focus time or PTO** — widen the lookback window (e.g. last
-  7 days) by telling the skill how far back to look.
+  "triage my slack".
 
 ## When NOT to use
 
-- Single-thread debriefs → use `summarize-slack-thread` instead.
+- Single-thread debriefs → use `summarize-slack-thread`.
 - Weekly Pedregal status doc updates → use `pedregal-biweekly-status`.
-- Drafting replies or taking action inside threads — this skill is
-  read-and-summarize only.
+- Drafting replies or acting inside threads — this skill is read-and-summarize
+  only.
 
 ## Inputs and defaults
 
 | Input | Default | Notes |
 |-------|---------|-------|
-| Lookback window | 3 days (72 hours) | Override with "look back N days" |
-| Destination | Yi Jin's Slack self-DM | Do not post anywhere else |
+| Lookback window | **1 day (24 hours)** | Strict, uniform across every category and priority. Do not override. |
+| Destination | Self-DM canvas titled `Daily Slack Triage — @eleanore.jin` | Re-used across runs; never create a second one |
 | Run cadence | Weekdays ~5pm PT | When scheduled |
-| User identity | Email `yi.jin@doordash.com` → Slack ID | Resolve fresh each run |
+| User identity | Email `yi.jin@doordash.com` → Slack ID `U02N4K114AK` | Resolve fresh each run |
+
+## Output format — Slack Canvas with interactive checkboxes
+
+The digest is posted as a **Slack Canvas** (not a plain message). Canvases:
+
+- Render `- [ ] item` and `- [x] item` as native interactive checkboxes.
+- Persist across runs — Eleanore ticks boxes in Slack, and the canvas
+  retains that state.
+- Are re-readable via `slack_read_canvas`, which returns the current
+  checked/unchecked state of every item.
+
+**Benefit:** each run is a *diff* against the previous canvas — she never
+re-sees an item she already handled.
 
 ## Workflow
 
-### 1. Load Slack auth + resolve identity
+### 1. Load Slack CLI
 
-Before any Slack operation, make sure the Slack CLI is ready. In Cowork, the
-`slack` CLI auto-provisions via the desktop bridge — no precheck needed. If a
-call stalls and the output contains `[bridge] auth`, tell Yi Jin:
+Invoke `core:using-slack` before any Slack operation. The `slack` CLI
+auto-provisions via the Cowork bridge; no manual auth. If a call stalls
+with `[bridge] auth` in the output, tell Yi Jin:
 
 > "A browser window should have opened on your Mac for authentication.
 > Please complete the sign-in there."
 
-Resolve Yi Jin's Slack user ID from her email:
+### 2. Resolve identity and locate/create the triage canvas
+
+Get her Slack user ID (`U02N4K114AK` is the known value — verify with
+`slack_read_user_profile`). Store as `$USER_ID`.
+
+Find the existing triage canvas:
+
+1. Search her self-DM channel for a message that contains the persistent
+   canvas link. A prior run records the canvas ID at the top of a marker
+   message: `"<!-- daily-slack-triage-canvas-id: F123... -->"`.
+2. If no canvas exists, go to step 7 and create one. Remember to record
+   its ID so future runs find it.
+3. Read the canvas with `slack_read_canvas` to get the current
+   checked-state map. Build a set `CHECKED = { <permalink> | row.checked }`.
+
+### 3. Gather candidates from the last 24 hours
+
+Compute the cutoff: `CUTOFF = now() - 24h`. Apply it to **every** source.
+
+**a. Public-channel @-mentions**
 
 ```bash
-slack search_users --email yi.jin@doordash.com
+slack slack_search_public \
+  query="<@$USER_ID> after:$(date -d '1 day ago' +%Y-%m-%d)" \
+  limit=20 sort=timestamp sort_dir=desc include_context=false
 ```
 
-Store the returned user ID as `$USER_ID`. All subsequent searches and the
-final DM target this ID.
+Paginate while `pagination_info` returns `cursor \`...\``. Parse the
+markdown result: `### Result N of M` blocks with `Channel:`, `From:`,
+`Time:`, `Message_ts:`, `Permalink:`, `Text:`. Dedupe by
+`(channel_id, thread_ts)`.
 
-### 2. Gather candidate threads (last 3 days)
-
-Collect from three sources, dedupe by thread permalink at the end.
-
-**a. @-mentions in public channels**
+**b. DMs and group DMs — `to:me` search**
 
 ```bash
-slack search_public --query "<@$USER_ID>" --after "$(date -v-3d +%Y-%m-%d)"
+slack slack_search_public_and_private \
+  query="to:me after:$(date -d '1 day ago' +%Y-%m-%d)" \
+  limit=20 sort=timestamp sort_dir=desc include_context=false \
+  channel_types="im,mpim"
 ```
 
-**b. Unreplied DMs and group DMs**
+This returns messages **to** her. **Do not rely on this list alone** to
+decide who spoke last — search omits her own replies. Collect the set of
+candidate DM channel IDs only; use step 4 to verify actual latest speaker.
 
-List recent DM conversations; keep only ones whose last message is NOT from
-`$USER_ID`.
+**c. Threads she participates in with new replies**
 
-**c. Threads she already posted in that have new replies**
+For channel threads where she has posted previously in the last 1 day,
+read the thread and check for any message newer than her last one. Covered
+implicitly by the public-channel mention search if she was @-mentioned;
+explicit pass is only needed for "silent" follow-ups on threads she
+started herself.
 
-For each recent thread she's participated in, use `slack read_thread` to
-check whether any message was posted after her last message.
+### 4. Determine actual last-speaker from full channel history
 
-### 3. Filter to unresolved only
+**Critical step — do NOT skip.** For each candidate:
 
-For every candidate, read the full thread and keep it only if:
+- **Channel threads:** call `slack_read_thread` with `response_format=concise`.
+  Parse the thread into an ordered message list.
+- **DMs / group DMs:** call `slack_read_channel` with `limit=25` to fetch
+  the last ~1 day of messages. Parse the `=== Message from NAME (ID) ===`
+  blocks; sort by `Message TS` descending.
 
-- **🆕 no reply yet** — she has NOT replied at all, OR
-- **↩️ new follow-up since your reply** — she replied but there is at least
-  one message from someone else after her last reply.
+For each candidate, find `latest_non_bot_speaker`:
 
-Drop:
+- If `latest_non_bot_speaker.uid == $USER_ID` → **you replied, skip**.
+- If someone else is the latest non-bot speaker → **candidate stays**.
 
-- Threads where her last message was the final word and nothing has happened
-  since.
-- Bot pings / automation messages that don't need a human reply.
-- Channel-wide `@here` / `@channel` announcements where she wasn't
-  specifically addressed.
+Never infer who-spoke-last from search results alone — searches for
+`to:me` or `<@$USER_ID>` exclude her outbound messages, so the comparison
+is one-sided.
 
-### 4. Categorize each thread into exactly one bucket
+### 5. Drop resolved, noisy, and bot-filed items
 
-Use the first match, top to bottom (launch blocker beats reliability beats
-bug beats support beats other):
+Drop candidates matching any of these patterns:
 
-1. **Pedregal launch blocker** — items blocking the Pedregal product launch,
-   especially from platform dependencies (Eradinus, Nexus, or other
-   infra/platform teams). Signal words: `blocker`, `blocking launch`,
-   `launch dependency`, plus dependency team names.
-2. **Reliability issue** — incidents, outages, latency spikes, error-rate
-   regressions, SLO burns, on-call pages. May or may not be Pedregal-specific.
+**a. Explicit resolution keywords in the last 3 messages** (any author,
+not just Eleanore): `fixed`, `resolved`, `closed`, `closing`, `back up`,
+`works now`, `is working now`, `seemed to work`, `seems to work`,
+`rolled back`, `reverted`, `redeployed .* fix`, `thanks for (fix|resolv|help|unblock|answer)`,
+`all good`, `all set`, `unblocked`, `good to go`, `ship it`,
+`:white_check_mark:`, `:heavy_check_mark:`, `:tada:`, `✅`, `🎉`.
+
+**b. Handoff / routing closure** (last message from someone other than
+Eleanore contains): `Adding <!subteam^`, `Adding <@`, `routing to`,
+`escalating to`, `pinging .* team`, `assigning to`, `cc'?ing for visibility`,
+`handed off to`, `.* will help`, `.* can help take a look`. This means
+the reroute happened — no action needed from Eleanore.
+
+**c. Conversation migration** (any recent message contains): `let's chat
+in (the )?other thread`, `continuing in <https://`, `moved to #`,
+`see <https://.*> for (the )?follow-up`, `started a thread here`. If the
+target thread/DM is already in the candidate set, dedupe by keeping only
+the target (the newer conversation location). Otherwise drop silently.
+
+**d. Conversational closers in DMs** — drop when the other party's last
+message is only one of: `^(sure|yes|yep|yeah|ok|okay|thanks|thx|thank you|
+got it|sounds good|will do|cool|nice|:+1:|:thumbsup:|:white_check_mark:)\.?!?$`
+or `^ok .{0,30}(thanks|confirm|good|great).*` (e.g., "ok got it, thanks
+for confirming!", "ok sounds good!").
+
+**e. Bot-filed requests from her awaiting others** — drop openers like
+`New Request from <@$USER_ID>`, `New PR Review Request from: <@$USER_ID>`
+that have no replies yet (she is waiting on others, not vice versa).
+
+**f. Passive group `cc:` messages** where Eleanore is one of several
+CCs with no direct ask — regex: `^\s*cc:?\s*(<@\w+>[\s,]*)+\s*(-|-{3})?\s*$`.
+
+**g. Previously-checked items** — if `permalink in CHECKED`, skip.
+
+### 6. Categorize and urgency-tag the survivors
+
+**Categories** (first match wins, top to bottom):
+
+1. **Pedregal launch blocker** — blockers for the Pedregal product launch;
+   dependencies from Eradinus, Nexus, or other platform teams; signal
+   words: `blocker`, `blocking launch`, `launch dependency`, or dependency
+   team names.
+2. **Reliability issue** — incidents, outages, latency, error rates, SLO
+   burns, cost regressions, on-call pages.
 3. **Pedregal feature gap / bug** — bug reports, feature requests, or
    functional issues tied to Pedregal. Channel name contains `pedregal` or
    the thread mentions Pedregal features/screens/flows.
-4. **Support escalation** — threads from support/escalation channels
-   (`#cx-*`, `#support-*`, `#eng-escalations`, `#help-*`) or any ask tied to
-   a customer / merchant / Dasher-impacting issue needing triage.
-5. **Other** — anything that doesn't fit the above four.
+4. **Support escalation** — threads from `#cx-*`, `#support-*`,
+   `#eng-escalations`, `#help-*`, or asks tied to customer / merchant /
+   Dasher-impacting issues.
+5. **Other** — anything else.
 
-Match case-insensitively. Pedregal signal words: `pedregal`, `eradinus`,
-`nexus` (the DoorDash platform, not the general word), explicit Pedregal
-launch-milestone references.
+Pedregal signal words (case-insensitive): `pedregal`, `eradinus`, `nexus`
+(DoorDash platform, not the general word), Pedregal launch-milestone
+references.
 
-### 5. Assign an urgency tag (P0 / P1 / P2)
+**Urgency (P0 / P1 / P2):**
 
-- **P0 — Urgent.** Active incident language (`down`, `outage`, `customers
-  impacted`, `blocking launch`, on-call pages, `urgent`, `ASAP`), direct asks
-  from senior leaders, launch blockers flagged as critical.
+- **P0 — Urgent.** Active incident language (`down`, `outage`,
+  `customers impacted`, `blocking launch`, on-call pages, `urgent`,
+  `ASAP`), direct asks from senior leaders, launch blockers flagged as
+  critical, cost regressions ≥$5k/day or ≥+100%.
 - **P1 — Needs response today.** Important stakeholder asking a direct
   question, unresolved blockers not yet critical, threads with 2+ follow-ups
   poking for a response.
 - **P2 — FYI / low urgency.** Informational tags, non-urgent questions,
   asks with no deadline.
 
-When in doubt, prefer the higher urgency (err toward P1 over P2).
+When ambiguous, prefer the higher urgency.
 
-### 6. Compose the DM — urgency first, then category
+### 7. Build / update the canvas
 
+Canvas title: `Daily Slack Triage — @eleanore.jin`
+Canvas format (use mrkdwn-style checkboxes — Slack canvases render these
+as native interactive checkboxes):
+
+```markdown
+<!-- daily-slack-triage-canvas-id: auto-filled by first-run post -->
+
+## 📬 Daily Slack triage — last updated <YYYY-MM-DD HH:MM PT>
+
+Items in the last 24 hours where the latest non-bot message is from someone
+other than you. Tick items as you handle them; next run skips anything
+you've checked.
+
+### 🚨 P0 — Urgent (N)
+
+- [ ] **[Pedregal launch blocker]** <one-sentence summary> — #<channel> — tagged by <display name> — <🆕 | ↩️> — <slack permalink>
+- [ ] ...
+
+### ⚠️ P1 — Needs response today (N)
+
+- [ ] **[<category>]** ...
+
+### ℹ️ P2 — FYI / low urgency (N)
+
+- [ ] **[<category>]** ...
+
+---
+
+_Previous run: <timestamp>. <K> items carried over unchecked, <M> new._
 ```
-📬 Daily Slack triage for <YYYY-MM-DD> — <N> unresolved threads
 
-🚨 *P0 — Urgent (<count>)*
-• [<category>] <one-sentence summary ≤120 chars> — #<channel> — tagged by <display name> — <🆕 | ↩️> — <slack permalink>
-• ...
+Within each urgency tier, order items by category:
+Pedregal launch blocker → Reliability issue → Pedregal feature gap / bug →
+Support escalation → Other.
 
-⚠️ *P1 — Needs response today (<count>)*
-• [<category>] ...
+Per-item fields:
 
-ℹ️ *P2 — FYI / low urgency (<count>)*
-• [<category>] ...
-```
+- Urgency + category tag in bold brackets.
+- One-sentence summary ≤120 chars.
+- Channel as `#channel-name` (not ID).
+- Tagger as display name (not user ID).
+- Permalink preserved verbatim — this is how she jumps into the thread.
+- Status glyph: `🆕` no reply yet, `↩️` new follow-up since her reply.
 
-Within each urgency tier, sub-group by category in this order:
+**Carry-over logic:** unchecked items from the previous canvas stay if
+they are still within the 1-day window and still unresolved; they are
+moved to the top of their urgency section and marked with a trailing
+` _(carried over from <prev date>)_` note. Items that fall out of the
+1-day window are removed from the canvas, checked or not.
 
-1. Pedregal launch blocker
-2. Reliability issue
-3. Pedregal feature gap / bug
-4. Support escalation
-5. Other
+**If the canvas already exists:** use `slack_update_canvas` with
+`action=replace` and the top-level section_id to rewrite the whole body.
+**Preserve** the `<!-- daily-slack-triage-canvas-id: ... -->` comment at
+the top.
 
-Per-item constraints:
+**If creating for the first time:** use `slack_create_canvas` targeted at
+her self-DM. After it returns `canvas_id`, post a message into her self-DM
+with text `"Daily triage canvas created: <canvas_url>. I'll update this in
+place every run."` so she has a permalink handy.
 
-- Summary ≤120 chars, plain text, no jargon explosion.
-- Channel name as `#channel-name`, not channel ID.
-- Tagger = display name, not user ID.
-- Permalink preserved exactly — this is how Yi Jin jumps into the thread.
-- Status glyph: `🆕` for no reply yet, `↩️` for new follow-up since her reply.
+### 8. Post / update a short "new items" DM alongside
 
-### 7. Send the DM
+After the canvas update, also send a **single short message** to her
+self-DM summarizing what's new this run:
 
-Open (or reuse) a self-DM conversation with `$USER_ID` and post the summary
-using `slack send_message` with Slack mrkdwn formatting.
+> `📬 Triage updated — <N_new> new items, <N_carry> carried over. Canvas: <canvas_url>`
 
-If the digest would exceed ~35,000 chars (Slack's hard limit is 40k),
-truncate the P2 section first and append:
+This gives her a Slack notification; the full detail lives in the canvas.
 
-> `(<X> more P2 items not shown — widen the window or ask me to paginate)`
+### 9. Empty-inbox case
 
-### 8. Empty-inbox case
-
-If there are zero unresolved threads, still send a short DM:
-
-> `✅ Inbox zero — no unresolved tagged threads from the last 3 days. Nice.`
-
-## Output format Yi Jin can expect
-
-```
-📬 Daily Slack triage for 2026-04-23 — 7 unresolved threads
-
-🚨 *P0 — Urgent (2)*
-• [Pedregal launch blocker] Eradinus team needs auth decision by EOD — #pedregal-launch — tagged by Alex Chen — ↩️ — <link>
-• [Reliability issue] Checkout p99 latency spiked 4x — #reliability — tagged by Sam Wu — 🆕 — <link>
-
-⚠️ *P1 — Needs response today (3)*
-• [Pedregal feature gap / bug] Cart page crash on iOS 17 — #pedregal-bugs — tagged by Jordan Lee — 🆕 — <link>
-• [Support escalation] Merchant can't onboard — #cx-merchants — tagged by Priya Shah — ↩️ — <link>
-• [Other] PM asking for roadmap input — #pm-roundtable — tagged by Chris Ng — 🆕 — <link>
-
-ℹ️ *P2 — FYI / low urgency (2)*
-• [Pedregal feature gap / bug] FYI: filter edge case — #pedregal-bugs — tagged by Taylor R — 🆕 — <link>
-• [Other] Doc review request — #pedregal-pm — tagged by Morgan Q — 🆕 — <link>
-```
+If the final list is zero items: update the canvas to a single line
+`✅ Inbox zero — no unresolved tagged items in the last 24 hours.`
+and send the short DM: `✅ Triage — inbox zero.`
 
 ## Constraints
 
-- **Never post outside Yi Jin's self-DM.** No replies, reactions, or
-  messages in source threads.
-- **Never skip the skill load + identity resolution steps.** Auth and the
-  user ID must be resolved before searches.
-- **Preserve permalinks verbatim.** They are the primary navigation aid.
-- **Categorization is best-guess** — if ambiguous, prefer the more urgent
-  category (launch blocker > reliability > bug > support > other).
-- **Do not persist state between runs.** Each run is independent; the
-  digest reflects the current 3-day window at run time.
+- **1-day window is strict** — it applies to every category and every
+  priority tier. A P0 from 26 hours ago does not enter the digest.
+- **Never post outside her self-DM.** No replies, reactions, or messages
+  in source threads.
+- **Never skip step 4** — last-speaker determination must come from full
+  channel history, not search results.
+- **Preserve permalinks verbatim.**
+- **Reuse the canvas across runs** — never create a second canvas.
+- **Categorization is best-guess** — prefer the more urgent category when
+  ambiguous (launch blocker > reliability > bug > support > other).
 
 ## Error handling
 
-- Slack search returns empty across all sources → still send the
-  "✅ Inbox zero" DM so Yi Jin knows the run completed.
-- Slack auth fails silently → surface a notification: "Slack auth may be
-  stale — open the Cowork bridge browser tab on your Mac to re-sign-in."
-- A thread permalink can't be generated → include the `channel_id + ts`
-  pair so she can still navigate manually.
-- DM send fails → leave the composed digest in the run output so it can be
-  retried manually.
+- Slack search returns empty across all sources → still update the canvas
+  to the ✅ inbox-zero state and send the short DM.
+- Canvas not found mid-run (was deleted) → create a new one, update its
+  ID marker.
+- Canvas update fails → fall back to posting the full digest as a regular
+  message in her self-DM and flag the fallback explicitly.
+- `slack_read_canvas` returns no items but the canvas exists → treat as
+  empty checked-set (fresh canvas).
 
 ## Related skills
 
 - `summarize-slack-thread` — deep-dive on a single flagged thread.
-- `pedregal-biweekly-status` — for the 2-week Pedregal Data Platform doc.
-- `pedregal-mob-weekly-update` — for the weekly MOB tracker post.
+- `pedregal-biweekly-status` — 2-week Pedregal Data Platform doc.
+- `pedregal-mob-weekly-update` — weekly MOB tracker.
