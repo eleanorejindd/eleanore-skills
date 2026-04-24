@@ -14,7 +14,12 @@ description: >
   urgency. Does not reply to or react on any source thread. Use when Yi Jin
   says "run my daily slack triage", "triage my slack", "what slack threads
   need my attention", "send me my slack digest", "who is waiting on me", or
-  schedules this as a recurring weekday 5pm PT task.
+  schedules this as a recurring weekday 5pm PT task. Also writes a daily
+  decision log (markdown, date-titled) of threads that closed during the
+  window to
+  `/Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/<YYYY-MM-DD>.md`
+  — capturing problem, decision / conclusion, and decision-makers for each
+  closed thread so Yi Jin has a searchable history of Slack-driven calls.
 ---
 
 # Daily Slack Triage
@@ -44,6 +49,7 @@ activity.
 |-------|---------|-------|
 | Lookback window | **1 day (24 hours)** | Strict, uniform across every category and priority. Do not override. |
 | Destination | Self-DM canvas titled `Daily Slack Triage — @eleanore.jin` | Re-used across runs; never create a second one |
+| Decision log path | `/Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/<YYYY-MM-DD>.md` | One file per day; append if today's file exists |
 | Run cadence | Weekdays ~5pm PT | When scheduled |
 | User identity | Email `yi.jin@doordash.com` → Slack ID `U02N4K114AK` | Resolve fresh each run |
 
@@ -294,6 +300,78 @@ If the final list is zero items: update the canvas to a single line
 `✅ Inbox zero — no unresolved tagged items in the last 24 hours.`
 and send the short DM: `✅ Triage — inbox zero.`
 
+### 10. Write the daily decision log for threads that closed in-window
+
+Capture every thread / DM that was **dropped as closed** during steps 4-5
+(keyword closures, handoff / routing, conversation migration, Eleanore was
+last speaker, DM conversational resolution) to a local markdown file. This
+builds a searchable history of Slack-driven decisions over time.
+
+**Path:** `/Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/<YYYY-MM-DD>.md`
+
+**Behavior:**
+
+- If the directory does not exist, create it with `mkdir -p`.
+- One file per day named by the date the run executed (e.g.
+  `2026-04-23.md`), not the date the thread closed.
+- If today's file already exists (a prior run earlier today), **append**
+  new entries under the existing heading — do not overwrite. Before
+  appending, skip any entry whose permalink is already present in the
+  file (idempotent across multiple runs per day).
+- Skip DM entries that resolved via conversational closers only ("Sure",
+  "ok got it, thanks", "yeah", etc.) — they carry no decision content.
+- Skip passive group `cc:` mentions — no decision captured.
+- Include substantive closures even when Eleanore was the last speaker
+  (she may have been the one who gave the answer / made the call).
+
+**File format:**
+
+```markdown
+# Daily Slack Decision Log — <YYYY-MM-DD>
+
+<one-line run summary: N threads, M DMs captured>
+
+## <channel-or-dm-name> — <short thread topic>
+
+- **Link:** <slack permalink>
+- **Problem:** <1-3 sentences: what was being asked, what was stuck, what
+  triggered the thread>
+- **Decision / Conclusion:** <1-3 sentences: what was resolved, what was
+  agreed, what was routed/handed off, or what workaround landed>
+- **Decision makers:** <comma-separated display names of people who drove
+  the decision — whoever made calls, routed, or confirmed resolution;
+  typically 1-4 names; include Eleanore when she made the call>
+- **Closure type:** <keyword-closure | handoff | conversation-migration |
+  she-was-last-speaker | dm-resolved>
+
+## <next entry>
+...
+```
+
+**How to fill each field:**
+
+- **Problem:** synthesize from the thread opener and the first few
+  replies. Do not just copy the opener verbatim — summarize.
+- **Decision / Conclusion:** synthesize from the last 2-5 messages.
+  Examples: "Routed to pretzel-core subteam for review", "Rolled back
+  deployment to 1.1565.0, confirmed fixed", "Confirmed we can only
+  ingest Cassandra → Snowflake via pepto, not datalake".
+- **Decision makers:** the people whose messages drove the closure. For
+  a routing closure, the person who did the routing. For a keyword
+  closure, whoever confirmed the fix. For a technical decision, whoever
+  made the call. Include Eleanore when she made the call. Use display
+  names, not user IDs.
+- **Closure type:** one of `keyword-closure`, `handoff`,
+  `conversation-migration`, `she-was-last-speaker`, `dm-resolved`.
+
+**Ordering within the file:** group by channel (or "Direct Messages" for
+DMs), then chronological by first thread message.
+
+**Fallback if path is not writable:** write to
+`/tmp/slack-decision-log-<YYYY-MM-DD>.md` instead and surface a warning
+in the notification DM: `⚠️ Decision log path not writable, saved to
+/tmp/slack-decision-log-<YYYY-MM-DD>.md — please move manually.`
+
 ## Constraints
 
 - **1-day window is strict** — it applies to every category and every
@@ -306,6 +384,8 @@ and send the short DM: `✅ Triage — inbox zero.`
 - **Reuse the canvas across runs** — never create a second canvas.
 - **Categorization is best-guess** — prefer the more urgent category when
   ambiguous (launch blocker > reliability > bug > support > other).
+- **Decision log is append-only and idempotent** — never delete past
+  entries; skip duplicates by permalink when re-running on the same day.
 
 ## Error handling
 
