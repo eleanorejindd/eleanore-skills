@@ -2,9 +2,10 @@
 name: daily-slack-triage
 description: >
   Builds a persistent, checkable Slack Canvas digest of unresolved items from
-  the past 1 day (24 hours) — public-channel @-mentions, DMs, group DMs, and
-  threads Yi Jin (Eleanore, U02N4K114AK) has participated in where new activity
-  has landed since her last reply. Posts / updates a single Canvas in her
+  the past 1 day (24 hours) — @-mentions in both public AND private channels,
+  DMs, group DMs, and threads Yi Jin (Eleanore, U02N4K114AK) authored or
+  participated in where new activity has landed since her last reply
+  (including threads she started where no one @-tagged her back). Posts / updates a single Canvas in her
   self-DM where she checks items off; next run reads the canvas first and
   skips anything already checked. Ranks by urgency (P0 / P1 / P2) then
   sub-groups by category: Pedregal launch blocker (Eradinus / Nexus / other
@@ -96,12 +97,24 @@ Find the existing triage canvas:
 
 Compute the cutoff: `CUTOFF = now() - 24h`. Apply it to **every** source.
 
-**a. Public-channel @-mentions**
+**Private channels are in scope.** Yi Jin has explicitly authorized private-
+channel search for this skill; always use `slack_search_public_and_private`
+with `channel_types="public_channel,private_channel,im,mpim"` rather than
+`slack_search_public`. A thread in a private channel is still her work and
+must not be silently dropped.
+
+**Window filter uses latest activity, not thread opener.** For every
+candidate, the in-window check is `max(message.ts for message in thread)
+>= CUTOFF`, NOT `thread.opener.ts >= CUTOFF`. A thread that opened 30
+hours ago but had a reply 4 hours ago is **in window**.
+
+**a. @-mentions in public AND private channels**
 
 ```bash
-slack slack_search_public \
+slack slack_search_public_and_private \
   query="<@$USER_ID> after:$(date -d '1 day ago' +%Y-%m-%d)" \
-  limit=20 sort=timestamp sort_dir=desc include_context=false
+  limit=20 sort=timestamp sort_dir=desc include_context=false \
+  channel_types="public_channel,private_channel"
 ```
 
 Paginate while `pagination_info` returns `cursor \`...\``. Parse the
@@ -109,7 +122,25 @@ markdown result: `### Result N of M` blocks with `Channel:`, `From:`,
 `Time:`, `Message_ts:`, `Permalink:`, `Text:`. Dedupe by
 `(channel_id, thread_ts)`.
 
-**b. DMs and group DMs — `to:me` search**
+**b. Threads she authored or posted in — `from:@me`**
+
+**This pass is mandatory, not optional.** It catches the case where she
+starts a thread (or joins one) without being @-mentioned by anyone — the
+mention search misses these entirely.
+
+```bash
+slack slack_search_public_and_private \
+  query="from:@me after:$(date -d '1 day ago' +%Y-%m-%d)" \
+  limit=20 sort=timestamp sort_dir=desc include_context=false \
+  channel_types="public_channel,private_channel"
+```
+
+For each result, resolve `(channel_id, thread_ts)` (use `Message_ts`
+as `thread_ts` if the post is a top-level thread starter). Add the
+thread to the candidate set if not already present via step (a). Step 4
+then determines whether there's activity after her last message.
+
+**c. DMs and group DMs — `to:me` search**
 
 ```bash
 slack slack_search_public_and_private \
@@ -122,22 +153,14 @@ This returns messages **to** her. **Do not rely on this list alone** to
 decide who spoke last — search omits her own replies. Collect the set of
 candidate DM channel IDs only; use step 4 to verify actual latest speaker.
 
-**c. Threads she participates in with new replies**
-
-For channel threads where she has posted previously in the last 1 day,
-read the thread and check for any message newer than her last one. Covered
-implicitly by the public-channel mention search if she was @-mentioned;
-explicit pass is only needed for "silent" follow-ups on threads she
-started herself.
-
 ### 4. Determine actual last-speaker from full channel history
 
 **Critical step — do NOT skip.** For each candidate:
 
 - **Channel threads:** call `slack_read_thread` with `response_format=concise`.
   Parse the thread into an ordered message list.
-- **DMs / group DMs:** call `slack_read_channel` with `limit=25` to fetch
-  the last ~1 day of messages. Parse the `=== Message from NAME (ID) ===`
+- **DMs / group DMs:** call `slack_read_channel` with `limit=50` to fetch
+  the last ~1-2 days of messages. Parse the `=== Message from NAME (ID) ===`
   blocks; sort by `Message TS` descending.
 
 For each candidate, find `latest_non_bot_speaker`:
@@ -186,6 +209,22 @@ that have no replies yet (she is waiting on others, not vice versa).
 CCs with no direct ask — regex: `^\s*cc:?\s*(<@\w+>[\s,]*)+\s*(-|-{3})?\s*$`.
 
 **g. Previously-checked items** — if `permalink in CHECKED`, skip.
+
+**h. Broadcast / launch announcements** — openers formatted as broadcasts
+with no direct question. Signals: leading `:rocket:` / `:tada:` /
+`:megaphone:` emoji, phrases like `excited to (share|announce)`, `now in
+(public|private) preview`, `now GA`, `launching`, `rolled out to`. If no
+direct question is addressed to Eleanore in the thread, classify as P2 FYI
+(do not drop entirely — she may still want awareness).
+
+**i. Loosened conversational-closer detection.** In addition to the strict
+`CLOSER_ONLY` / `CLOSER_COMPOUND` regexes, also drop DMs whose latest
+message from the other party is **≤10 words** and ends with any of:
+`thanks`, `thank you`, `good`, `got it`, `sounds good`, `no worries`,
+`no problem`, `we are good to go`, `we're good`, `wink emoji`,
+`smile emoji only`. Catches examples like "Oh sounds good. Thanks",
+"sounds good thanks", "No worries :wink:", "put them in bags and we are
+good to go".
 
 ### 6. Categorize and urgency-tag the survivors
 
@@ -395,6 +434,13 @@ it by searching her own DMs.
   in source threads.
 - **Never skip step 4** — last-speaker determination must come from full
   channel history, not search results.
+- **Always include private channels** in the mention search — the user has
+  authorized this. Never fall back to `slack_search_public`-only for
+  mentions.
+- **Always run the `from:@me` pass** — threads Eleanore started or posted
+  in without being @-tagged back are not covered by mention search.
+- **Window filter uses latest-activity timestamp**, not opener timestamp —
+  a long-running thread with a recent reply must stay in scope.
 - **Preserve permalinks verbatim.**
 - **Reuse the canvas across runs** — never create a second canvas.
 - **Categorization is best-guess** — prefer the more urgent category when
