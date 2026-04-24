@@ -367,10 +367,25 @@ builds a searchable history of Slack-driven decisions over time.
 **Ordering within the file:** group by channel (or "Direct Messages" for
 DMs), then chronological by first thread message.
 
-**Fallback if path is not writable:** write to
-`/tmp/slack-decision-log-<YYYY-MM-DD>.md` instead and surface a warning
-in the notification DM: `⚠️ Decision log path not writable, saved to
-/tmp/slack-decision-log-<YYYY-MM-DD>.md — please move manually.`
+**Slack notification, two paths:**
+
+- **On successful file write** — send a short confirmation DM to her
+  self-DM after the triage notification:
+  `📒 Decision log written — <N_threads> threads + <N_dms> DMs captured to <absolute path>.`
+  This is in addition to the regular triage "N new / M carried over"
+  notification; do not merge them.
+- **On failure to write** (path not writable, directory permission
+  error, disk full, etc.) — do NOT save a fallback file to /tmp. Instead,
+  send the **entire decision log content** as a Slack DM to her self-DM
+  so the data isn't lost. Prefix with:
+  `⚠️ Couldn't write decision log to <path>. Full log inline below — copy into your knowledge base manually:` followed by a code block containing the markdown.
+  If the log exceeds Slack's 40k character limit, split across multiple
+  sequential messages numbered `(1/N)`, `(2/N)`, etc.
+
+Rationale: the decision log is high-value context Eleanore wants to
+retain. A /tmp file in a sandbox that may be wiped between sessions is
+not durable; inlining the content into Slack guarantees she can recover
+it by searching her own DMs.
 
 ## Constraints
 
