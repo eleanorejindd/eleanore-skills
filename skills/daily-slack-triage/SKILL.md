@@ -15,18 +15,16 @@ description: >
   urgency. Does not reply to or react on any source thread. Use when Yi Jin
   says "run my daily slack triage", "triage my slack", "what slack threads
   need my attention", "send me my slack digest", "who is waiting on me", or
-  schedules this as a recurring weekday 5pm PT task. Also writes a daily
+  schedules this as a recurring weekday 5pm PT task. Also posts a daily
   decision log (markdown, date-titled) of threads that closed during the
-  window to
-  `/Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/<YYYY-MM-DD>.md`
-  — capturing problem, decision / conclusion, and decision-makers for each
-  closed thread so Yi Jin has a searchable history of Slack-driven calls.
+  window — capturing problem, decision / conclusion, and decision-makers
+  for each closed thread — directly to her Slack self-DM as a separate
+  message after the triage notification (with Gmail fallback if Slack is
+  unavailable). The skill performs no local file writes; Yi Jin archives
+  the decision log content from Slack to her own knowledge base manually.
   Resilient to unattended scheduled runs: pre-flight auth check with a
-  hard 5-second budget so the run never hangs waiting for browser sign-in,
-  always-on per-run status log to
-  `/Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/runs/`,
-  and a catch-up summary on the next successful run after any missed
-  scheduled fires.
+  hard 5-second budget so the run never hangs waiting for browser sign-in;
+  on Slack-auth failure, sends an email to yi.jin@doordash.com instead.
 ---
 
 # Daily Slack Triage
@@ -55,12 +53,13 @@ activity.
 | Input | Default | Notes |
 |-------|---------|-------|
 | Lookback window | **1 day (24 hours)** | Strict, uniform across every category and priority. Do not override. |
-| Destination | Self-DM canvas titled `Daily Slack Triage — @eleanore.jin` | Re-used across runs; never create a second one |
-| Decision log path | `/Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/<YYYY-MM-DD>.md` | One file per day; append if today's file exists |
-| Run-status log dir | `/Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/runs/` | Per-run status files + `recent.json` summary + `REAUTH_NEEDED` sentinel |
+| Triage destination | Self-DM canvas titled `Daily Slack Triage — @eleanore.jin` | Re-used across runs; never create a second one |
+| Decision log destination | Slack self-DM (separate message after triage notification) | Eleanore archives to her local knowledge base manually |
+| Failure-notification fallback | Gmail to yi.jin@doordash.com | Used when Slack auth is broken |
 | Pre-flight auth budget | 5 seconds | Hard timeout — fail fast in unattended runs, never wait for browser auth |
 | Run cadence | Weekdays ~5pm PT | When scheduled |
 | User identity | Email `yi.jin@doordash.com` → Slack ID `U02N4K114AK` | Resolve fresh each run |
+| Local file writes | **None** | Skill writes nothing to local disk; everything goes to Slack or Gmail |
 
 ## Output format — Slack Canvas with interactive checkboxes
 
@@ -77,45 +76,20 @@ re-sees an item she already handled.
 
 ## Workflow
 
-### 0. Run-status log (always, regardless of outcome)
+### 0. Run-state tracking (in the canvas, not on local disk)
 
-Before any Slack work, prepare a run-status entry. Write it at the END
-of the run no matter what — success, no-data, auth-failure, or
-partial-failure — so Eleanore has a durable audit trail of every
-scheduled fire.
-
-**Path:** `/Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/runs/<YYYY-MM-DD>-<HH-MM>.log`
-
-**Format (single-file-per-run, plain text):**
+The skill performs **no local file writes**. Run state for catch-up
+reporting (last successful run timestamp, recent run history) lives in
+hidden marker comments at the top of the persistent canvas:
 
 ```
-run_id: <uuid or YYYYMMDD-HHMM>
-fired_at: 2026-04-27T17:08:00-07:00
-mode: scheduled | run-now | adhoc
-status: success | no-data | auth-failure | partial-failure | error
-duration_seconds: 12
-unresolved_count: 4
-closed_count: 9
-canvas_id: F0B0D4JJMQQ
-canvas_updated: true
-notification_sent: true
-decision_log_path: /Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/2026-04-27.md
-decision_log_written: true
-auth_state:
-  slack: ok | needs_reauth | unknown
-  helpers_provisioned: true
-errors: []
-notes: []
+<!-- daily-slack-triage-canvas-id: F0B0D4JJMQQ -->
+<!-- last-successful-run: 2026-04-27T17:08:00-07:00 -->
+<!-- recent-runs: [{"ts":"2026-04-27T17:08-07:00","status":"success"},{"ts":"2026-04-26T17:08-07:00","status":"auth-failure","reason":"bridge_auth_unavailable"}] -->
 ```
 
-If status is `auth-failure`, populate `errors` with the specific failure
-mode (`bridge_auth_unavailable`, `helpers_not_provisioned`,
-`slack_token_expired`, etc.) and skip the rest of the workflow cleanly.
-
-Also maintain a running summary file at
-`/Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/runs/recent.json`
-with the last 30 run entries (FIFO). Used by step 3 for catch-up
-reporting.
+Step 11 updates these markers after every run. Step 2.5 reads them for
+catch-up. The `recent-runs` array is FIFO-trimmed to the last 10 entries.
 
 ### 0.5. Pre-flight auth + helper provision check (5-second budget)
 
@@ -177,7 +151,7 @@ Find the existing triage canvas:
 
 ### 2.5. Catch-up reporting from previous failed runs
 
-Read `/Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/runs/recent.json`.
+Read the `<!-- recent-runs: ... -->` marker from the existing canvas.
 Find all entries since the last `status: success` run. If any
 intermediate runs failed, build a catch-up summary like:
 
@@ -189,8 +163,8 @@ Prepend this summary to the canvas update for this run (above the
 `## 📬 Daily Slack triage` heading) AND to the notification DM. Do
 this BEFORE the regular workflow so Eleanore sees the gap even if
 today's run finds zero unresolved items. Once surfaced, mark those
-prior run entries with `catch_up_surfaced: true` in `recent.json` so
-they don't repeat on subsequent runs.
+prior run entries with `"catch_up_surfaced": true` in the
+`recent-runs` marker so they don't repeat on subsequent runs.
 
 This widens the lookback window for THIS run only: when there are
 missed runs, set `LOOKBACK = max(24h, time-since-last-successful-run)`
@@ -443,34 +417,27 @@ If the final list is zero items: update the canvas to a single line
 `✅ Inbox zero — no unresolved tagged items in the last 24 hours.`
 and send the short DM: `✅ Triage — inbox zero.`
 
-### 10. Write the daily decision log for threads that closed in-window
+### 10. Post the daily decision log to Slack (Gmail fallback)
 
 Capture every thread / DM that was **dropped as closed** during steps 4-5
 (keyword closures, handoff / routing, conversation migration, Eleanore was
-last speaker, DM conversational resolution) to a local markdown file. This
-builds a searchable history of Slack-driven decisions over time.
+last speaker, DM conversational resolution) and post the assembled log
+**directly to her Slack self-DM** as a separate message after the triage
+notification. Eleanore archives it to her own knowledge base manually —
+the skill does NOT write to local disk.
 
-**Path:** `/Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/<YYYY-MM-DD>.md`
+**Selection rules:**
 
-**Behavior:**
-
-- If the directory does not exist, create it with `mkdir -p`.
-- One file per day named by the date the run executed (e.g.
-  `2026-04-23.md`), not the date the thread closed.
-- If today's file already exists (a prior run earlier today), **append**
-  new entries under the existing heading — do not overwrite. Before
-  appending, skip any entry whose permalink is already present in the
-  file (idempotent across multiple runs per day).
 - Skip DM entries that resolved via conversational closers only ("Sure",
   "ok got it, thanks", "yeah", etc.) — they carry no decision content.
 - Skip passive group `cc:` mentions — no decision captured.
 - Include substantive closures even when Eleanore was the last speaker
   (she may have been the one who gave the answer / made the call).
 
-**File format:**
+**Content format (markdown, posted in a single Slack message):**
 
 ```markdown
-# Daily Slack Decision Log — <YYYY-MM-DD>
+📒 Daily Slack Decision Log — <YYYY-MM-DD>
 
 <one-line run summary: N threads, M DMs captured>
 
@@ -507,63 +474,68 @@ builds a searchable history of Slack-driven decisions over time.
 - **Closure type:** one of `keyword-closure`, `handoff`,
   `conversation-migration`, `she-was-last-speaker`, `dm-resolved`.
 
-**Ordering within the file:** group by channel (or "Direct Messages" for
-DMs), then chronological by first thread message.
+**Ordering:** group by channel (or "Direct Messages" for DMs), then
+chronological by first thread message.
 
-**Slack notification, two paths:**
+**Delivery — Slack primary, Gmail fallback:**
 
-- **On successful file write** — send a short confirmation DM to her
-  self-DM after the triage notification:
-  `📒 Decision log written — <N_threads> threads + <N_dms> DMs captured to <absolute path>.`
-  This is in addition to the regular triage "N new / M carried over"
-  notification; do not merge them.
-- **On failure to write** (path not writable, directory permission
-  error, disk full, etc.) — do NOT save a fallback file to /tmp. Instead,
-  send the **entire decision log content** as a Slack DM to her self-DM
-  so the data isn't lost. Prefix with:
-  `⚠️ Couldn't write decision log to <path>. Full log inline below — copy into your knowledge base manually:` followed by a code block containing the markdown.
-  If the log exceeds Slack's 40k character limit, split across multiple
-  sequential messages numbered `(1/N)`, `(2/N)`, etc.
+1. **Slack DM (primary).** Send the full decision log content as a
+   single Slack DM to her self-DM via `slack_send_message` with
+   `channel_id = $USER_ID`. If the content exceeds ~35,000 chars (Slack's
+   hard limit is 40k), split across sequential messages numbered
+   `(1/N)`, `(2/N)`, etc. — preserve full content.
 
-Rationale: the decision log is high-value context Eleanore wants to
-retain. A /tmp file in a sandbox that may be wiped between sessions is
-not durable; inlining the content into Slack guarantees she can recover
-it by searching her own DMs.
+2. **Gmail email (fallback).** If the Slack post fails — auth error,
+   network error, rate-limited, anything — send the full decision log
+   content via Gmail to yi.jin@doordash.com. Use `gws gmail send` (or
+   equivalent `send-gmail-message` skill). Format:
 
-### 11. Always finalize the run-status log
+   ```
+   To: yi.jin@doordash.com
+   Subject: 📒 Daily Slack decision log — <YYYY-MM-DD>
+   Body: <full decision log markdown>
+   ```
+
+   Gmail handles long content gracefully (no need to split).
+
+**If both Slack and Gmail fail:** include the decision log as a
+collapsed quote inside the auth-failure email (step 11) — the user
+gets it via the same email that tells them auth is broken.
+
+**No content is ever written to local disk.** Eleanore copies the log
+content from Slack (or Gmail) to her local knowledge base
+(`/Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/`)
+manually on her own schedule.
+
+**Empty decision log case:** if zero threads closed in-window, skip
+this step entirely (don't post an empty log message).
+
+### 11. Always finalize the run state in the canvas markers
 
 This step runs **on every code path** — success, no-data, auth-failure,
-partial-failure, error. Never skip it. It's how Eleanore learns about
-silent failures.
+partial-failure, error. Never skip it.
 
-**Write the per-run status file** (path from step 0). Set:
+**Update the canvas marker comments** at the top of the persistent
+canvas via `slack_update_canvas`:
 
-- `status` to the actual outcome
-- `duration_seconds` from when step 0 started
-- All counters / flags reflecting what was actually done
-- `errors` populated with any failure modes encountered
-- `notes` populated with anything unusual the run noticed (token close
-  to expiry, very large lookback window from catch-up, etc.)
+- `<!-- last-successful-run: <ISO timestamp> -->` — only update on
+  success or no-data outcomes; leave previous value on failures so
+  catch-up reporting still finds the right baseline.
+- `<!-- recent-runs: [...] -->` — append this run's entry as
+  `{"ts": "<ISO>", "status": "<outcome>", "reason": "<error key>"}`,
+  trim to the last 10 entries (FIFO).
 
-**Update `recent.json`** by appending this run's entry and trimming to
-the most recent 30 entries.
+If the canvas itself is unreachable (Slack auth fully broken), skip
+the marker update — the email fallback in this step will surface the
+failure regardless.
 
-**Auth-failure side effects:**
+**Auth-failure path — Slack-DM is unusable, so use Gmail:**
 
-- Write a sentinel file `/Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/runs/REAUTH_NEEDED` containing the failure reason and the time of first observed auth failure. Subsequent failed runs append to it but do not overwrite the first observation timestamp. The next interactive Cowork session can read this file and prompt for reauth at startup.
-- If Slack auth is partially working (some calls fine, some fail) — write the partial run-status normally and continue.
-- If Slack auth is completely down — skip Slack notifications, but keep writing the status log and decision log to disk.
+When `status == "auth-failure"`:
 
-**Failure notification fallback chain.** Slack DMs fail when Slack auth
-is the problem (chicken-and-egg). Use this chain in order, stopping at
-the first one that succeeds:
-
-1. **Slack DM** — only attempted if `auth_state.slack == "ok"`. Skip
-   entirely on auth-failure.
-2. **Gmail email to yi.jin@doordash.com** — Gmail auth (`gws` CLI) is
-   independent of Slack auth, so it usually works even when Slack is
-   broken. Load `core:using-gmail` and send via `gws gmail send` (or the
-   equivalent `send-gmail-message` skill). Format:
+1. Skip the Slack triage notification and Slack decision log post —
+   they're impossible.
+2. Send a single Gmail email to yi.jin@doordash.com:
 
    ```
    To: yi.jin@doordash.com
@@ -574,36 +546,32 @@ the first one that succeeds:
      Your scheduled daily Slack triage at <fired_at> couldn't run.
 
      Reason: <human-readable failure reason>
-     Status file: /Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/runs/<filename>.log
-
      Last successful run: <timestamp> (<N> runs missed since then)
 
      Recovery: open Cowork on your Mac and run any Slack-touching skill
-     (e.g. "summarize my slack mentions"). The bridge will detect the
-     REAUTH_NEEDED sentinel and prompt for re-sign-in. Once you sign
-     in, the next scheduled run will replay the missed window.
+     (e.g. "summarize my slack mentions"). That refreshes the Slack
+     auth tokens. The next scheduled run will then replay the missed
+     window automatically.
 
      — daily-slack-triage skill (auto-generated)
    ```
 
-   To prevent inbox spam during a multi-day outage, send the email at
-   most ONCE per failure streak: check `recent.json` for whether the
-   immediately-prior run was also auth-failure with the same reason —
-   if so, skip the email. The status file still gets written every run;
-   the email is just for the *first* failure in any consecutive streak.
+3. **Inbox-spam control:** before sending, read the canvas
+   `<!-- recent-runs: ... -->` marker (if reachable) — if the
+   immediately-prior run was also `auth-failure` with the same reason,
+   skip the email. Send only on the first failure in a consecutive
+   streak. If the canvas isn't reachable, send the email anyway
+   (better one extra email than silence).
 
-3. **Google Calendar event** — only if Gmail also fails. Create a
-   30-minute event on her primary calendar at the current time titled
-   `⚠️ Slack triage skipped — reauth needed`. Calendar API has yet
-   another auth path; if even that fails, the local status file is
-   the last line of defense.
-
-4. **`REAUTH_NEEDED` sentinel file** — written regardless of whether
-   any of the above succeeded. The next interactive Cowork session
-   reads it and prompts for reauth at startup.
+4. If Gmail also fails (rare — `gws` auth is independent of Slack),
+   create a Google Calendar event on her primary calendar titled
+   `⚠️ Slack triage skipped — reauth needed` for the current 30-minute
+   slot as a last-resort signal.
 
 The skill itself does NOT try to send Slack DMs about Slack-auth
-failures (that's the chicken-and-egg).
+failures (chicken-and-egg). All recovery state lives either in the
+canvas markers (when canvas is reachable) or implicitly in Gmail
+(when not).
 
 ## Constraints
 
@@ -624,21 +592,28 @@ failures (that's the chicken-and-egg).
 - **Reuse the canvas across runs** — never create a second canvas.
 - **Categorization is best-guess** — prefer the more urgent category when
   ambiguous (launch blocker > reliability > bug > support > other).
-- **Decision log is append-only and idempotent** — never delete past
-  entries; skip duplicates by permalink when re-running on the same day.
+- **No local file writes — ever.** Run state lives in the canvas
+  markers, decision logs go to Slack DM (Gmail fallback). Eleanore
+  archives content to her own knowledge base manually. The skill
+  never touches `/Users/yi.jin/...` paths.
+- **Decision log idempotency by permalink** — if re-running on the same
+  day, the in-memory dedup uses canvas state plus the most recent
+  decision-log Slack DM to skip already-posted entries. Best-effort,
+  not strictly enforced.
 - **Never wait for browser auth in unattended mode.** The pre-flight
   check has a hard 5-second budget; if Slack auth isn't already cached,
-  fail fast and log. The bridge's interactive auth flow is for
-  interactive sessions only.
-- **Always finalize the run-status log**, even on early-exit paths
-  (auth-failure, no-data, error). Step 11 is non-skippable.
+  fail fast. The bridge's interactive auth flow is for interactive
+  sessions only.
+- **Always finalize step 11**, even on early-exit paths (auth-failure,
+  no-data, error). Canvas marker update + email fallback are
+  non-skippable.
 - **Auth-failure recovery is deferred to the next interactive
-  session**, not retried in-process. The `REAUTH_NEEDED` sentinel is
-  the handoff mechanism.
-- **Failure notifications use a fallback chain** Slack DM → Gmail email
-  → Calendar event → local sentinel — to ensure Eleanore is reachable
-  even when Slack is down. Email is sent at most once per failure
-  streak to avoid inbox spam.
+  session.** Email fallback notifies Eleanore; she opens Cowork, uses
+  any Slack-touching skill to refresh tokens, and the next scheduled
+  run replays the gap.
+- **Failure notifications: Slack DM → Gmail → Calendar event.** No
+  local sentinel. Email rate-limited to once per consecutive
+  same-reason failure streak.
 
 ## Error handling
 
