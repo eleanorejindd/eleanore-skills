@@ -21,6 +21,12 @@ description: >
   `/Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/<YYYY-MM-DD>.md`
   — capturing problem, decision / conclusion, and decision-makers for each
   closed thread so Yi Jin has a searchable history of Slack-driven calls.
+  Resilient to unattended scheduled runs: pre-flight auth check with a
+  hard 5-second budget so the run never hangs waiting for browser sign-in,
+  always-on per-run status log to
+  `/Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/runs/`,
+  and a catch-up summary on the next successful run after any missed
+  scheduled fires.
 ---
 
 # Daily Slack Triage
@@ -51,6 +57,8 @@ activity.
 | Lookback window | **1 day (24 hours)** | Strict, uniform across every category and priority. Do not override. |
 | Destination | Self-DM canvas titled `Daily Slack Triage — @eleanore.jin` | Re-used across runs; never create a second one |
 | Decision log path | `/Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/<YYYY-MM-DD>.md` | One file per day; append if today's file exists |
+| Run-status log dir | `/Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/runs/` | Per-run status files + `recent.json` summary + `REAUTH_NEEDED` sentinel |
+| Pre-flight auth budget | 5 seconds | Hard timeout — fail fast in unattended runs, never wait for browser auth |
 | Run cadence | Weekdays ~5pm PT | When scheduled |
 | User identity | Email `yi.jin@doordash.com` → Slack ID `U02N4K114AK` | Resolve fresh each run |
 
@@ -68,6 +76,80 @@ The digest is posted as a **Slack Canvas** (not a plain message). Canvases:
 re-sees an item she already handled.
 
 ## Workflow
+
+### 0. Run-status log (always, regardless of outcome)
+
+Before any Slack work, prepare a run-status entry. Write it at the END
+of the run no matter what — success, no-data, auth-failure, or
+partial-failure — so Eleanore has a durable audit trail of every
+scheduled fire.
+
+**Path:** `/Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/runs/<YYYY-MM-DD>-<HH-MM>.log`
+
+**Format (single-file-per-run, plain text):**
+
+```
+run_id: <uuid or YYYYMMDD-HHMM>
+fired_at: 2026-04-27T17:08:00-07:00
+mode: scheduled | run-now | adhoc
+status: success | no-data | auth-failure | partial-failure | error
+duration_seconds: 12
+unresolved_count: 4
+closed_count: 9
+canvas_id: F0B0D4JJMQQ
+canvas_updated: true
+notification_sent: true
+decision_log_path: /Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/2026-04-27.md
+decision_log_written: true
+auth_state:
+  slack: ok | needs_reauth | unknown
+  helpers_provisioned: true
+errors: []
+notes: []
+```
+
+If status is `auth-failure`, populate `errors` with the specific failure
+mode (`bridge_auth_unavailable`, `helpers_not_provisioned`,
+`slack_token_expired`, etc.) and skip the rest of the workflow cleanly.
+
+Also maintain a running summary file at
+`/Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/runs/recent.json`
+with the last 30 run entries (FIFO). Used by step 3 for catch-up
+reporting.
+
+### 0.5. Pre-flight auth + helper provision check (5-second budget)
+
+Before doing any real work, verify the environment can actually reach
+Slack. **Hard limit: 5 seconds total** — if anything hangs past that,
+treat it as auth-failure and skip to step 11.
+
+**Step 0.5a — confirm helpers are present:**
+
+```bash
+test -x /tmp/doordash-helpers-$(id -u)/linux-arm64/uv \
+  && test -x /tmp/doordash-helpers-$(id -u)/linux-arm64/gh
+```
+
+If missing, attempt a single warm-up call to trigger bridge
+provisioning: `gh --version` (provisions on demand). If still missing
+after 5 seconds → `errors.push("helpers_not_provisioned")`, status
+`auth-failure`, jump to step 11.
+
+**Step 0.5b — confirm Slack auth is good without triggering browser:**
+
+Run a lightweight `slack slack_read_user_profile` with a 5-second
+timeout. Three outcomes:
+
+- **Returns user data** → `auth_state.slack = "ok"`, proceed.
+- **Returns "Bridge auth flow required" / "Login exited with code 2" /
+  "requires authentication"** → `auth_state.slack = "needs_reauth"`,
+  status `auth-failure`. **Do NOT wait for the browser to open in
+  unattended mode.** Skip to step 11.
+- **Times out** → `auth_state.slack = "unknown"`, status
+  `auth-failure`, skip to step 11.
+
+**Critical:** in unattended mode, never wait for browser auth. Fail
+fast and log; the next interactive run will recover.
 
 ### 1. Load Slack CLI
 
@@ -92,6 +174,28 @@ Find the existing triage canvas:
    its ID so future runs find it.
 3. Read the canvas with `slack_read_canvas` to get the current
    checked-state map. Build a set `CHECKED = { <permalink> | row.checked }`.
+
+### 2.5. Catch-up reporting from previous failed runs
+
+Read `/Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/runs/recent.json`.
+Find all entries since the last `status: success` run. If any
+intermediate runs failed, build a catch-up summary like:
+
+> ⚠️ 2 scheduled runs missed since last success:
+> • 2026-04-25 17:08 PT — auth-failure (bridge_auth_unavailable)
+> • 2026-04-26 17:08 PT — auth-failure (helpers_not_provisioned)
+
+Prepend this summary to the canvas update for this run (above the
+`## 📬 Daily Slack triage` heading) AND to the notification DM. Do
+this BEFORE the regular workflow so Eleanore sees the gap even if
+today's run finds zero unresolved items. Once surfaced, mark those
+prior run entries with `catch_up_surfaced: true` in `recent.json` so
+they don't repeat on subsequent runs.
+
+This widens the lookback window for THIS run only: when there are
+missed runs, set `LOOKBACK = max(24h, time-since-last-successful-run)`
+so threads that closed during the gap are still captured in the
+decision log. Cap at 7 days as a safety bound.
 
 ### 3. Gather candidates from the last 24 hours
 
@@ -426,6 +530,36 @@ retain. A /tmp file in a sandbox that may be wiped between sessions is
 not durable; inlining the content into Slack guarantees she can recover
 it by searching her own DMs.
 
+### 11. Always finalize the run-status log
+
+This step runs **on every code path** — success, no-data, auth-failure,
+partial-failure, error. Never skip it. It's how Eleanore learns about
+silent failures.
+
+**Write the per-run status file** (path from step 0). Set:
+
+- `status` to the actual outcome
+- `duration_seconds` from when step 0 started
+- All counters / flags reflecting what was actually done
+- `errors` populated with any failure modes encountered
+- `notes` populated with anything unusual the run noticed (token close
+  to expiry, very large lookback window from catch-up, etc.)
+
+**Update `recent.json`** by appending this run's entry and trimming to
+the most recent 30 entries.
+
+**Auth-failure side effects:**
+
+- Write a sentinel file `/Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/runs/REAUTH_NEEDED` containing the failure reason and the time of first observed auth failure. Subsequent failed runs append to it but do not overwrite the first observation timestamp. The next interactive Cowork session can read this file and prompt for reauth at startup.
+- If Slack auth is partially working (some calls fine, some fail) — write the partial run-status normally and continue.
+- If Slack auth is completely down — skip Slack notifications, but keep writing the status log and decision log to disk.
+
+**Notify Eleanore of failures via the next interactive session, not via
+Slack.** When she opens Cowork next and runs anything Slack-related, the
+host bridge will see the `REAUTH_NEEDED` sentinel and prompt her. The
+skill itself does NOT try to send Slack DMs about Slack-auth failures
+(that's a chicken-and-egg).
+
 ## Constraints
 
 - **1-day window is strict** — it applies to every category and every
@@ -447,6 +581,15 @@ it by searching her own DMs.
   ambiguous (launch blocker > reliability > bug > support > other).
 - **Decision log is append-only and idempotent** — never delete past
   entries; skip duplicates by permalink when re-running on the same day.
+- **Never wait for browser auth in unattended mode.** The pre-flight
+  check has a hard 5-second budget; if Slack auth isn't already cached,
+  fail fast and log. The bridge's interactive auth flow is for
+  interactive sessions only.
+- **Always finalize the run-status log**, even on early-exit paths
+  (auth-failure, no-data, error). Step 11 is non-skippable.
+- **Auth-failure recovery is deferred to the next interactive
+  session**, not retried in-process. The `REAUTH_NEEDED` sentinel is
+  the handoff mechanism.
 
 ## Error handling
 
