@@ -554,11 +554,56 @@ the most recent 30 entries.
 - If Slack auth is partially working (some calls fine, some fail) — write the partial run-status normally and continue.
 - If Slack auth is completely down — skip Slack notifications, but keep writing the status log and decision log to disk.
 
-**Notify Eleanore of failures via the next interactive session, not via
-Slack.** When she opens Cowork next and runs anything Slack-related, the
-host bridge will see the `REAUTH_NEEDED` sentinel and prompt her. The
-skill itself does NOT try to send Slack DMs about Slack-auth failures
-(that's a chicken-and-egg).
+**Failure notification fallback chain.** Slack DMs fail when Slack auth
+is the problem (chicken-and-egg). Use this chain in order, stopping at
+the first one that succeeds:
+
+1. **Slack DM** — only attempted if `auth_state.slack == "ok"`. Skip
+   entirely on auth-failure.
+2. **Gmail email to yi.jin@doordash.com** — Gmail auth (`gws` CLI) is
+   independent of Slack auth, so it usually works even when Slack is
+   broken. Load `core:using-gmail` and send via `gws gmail send` (or the
+   equivalent `send-gmail-message` skill). Format:
+
+   ```
+   To: yi.jin@doordash.com
+   Subject: ⚠️ Daily Slack triage skipped — <reason> at <time>
+   Body:
+     Hi Eleanore,
+
+     Your scheduled daily Slack triage at <fired_at> couldn't run.
+
+     Reason: <human-readable failure reason>
+     Status file: /Users/yi.jin/Projects/eleanore-knowledge-base/raw/slack-messages/runs/<filename>.log
+
+     Last successful run: <timestamp> (<N> runs missed since then)
+
+     Recovery: open Cowork on your Mac and run any Slack-touching skill
+     (e.g. "summarize my slack mentions"). The bridge will detect the
+     REAUTH_NEEDED sentinel and prompt for re-sign-in. Once you sign
+     in, the next scheduled run will replay the missed window.
+
+     — daily-slack-triage skill (auto-generated)
+   ```
+
+   To prevent inbox spam during a multi-day outage, send the email at
+   most ONCE per failure streak: check `recent.json` for whether the
+   immediately-prior run was also auth-failure with the same reason —
+   if so, skip the email. The status file still gets written every run;
+   the email is just for the *first* failure in any consecutive streak.
+
+3. **Google Calendar event** — only if Gmail also fails. Create a
+   30-minute event on her primary calendar at the current time titled
+   `⚠️ Slack triage skipped — reauth needed`. Calendar API has yet
+   another auth path; if even that fails, the local status file is
+   the last line of defense.
+
+4. **`REAUTH_NEEDED` sentinel file** — written regardless of whether
+   any of the above succeeded. The next interactive Cowork session
+   reads it and prompts for reauth at startup.
+
+The skill itself does NOT try to send Slack DMs about Slack-auth
+failures (that's the chicken-and-egg).
 
 ## Constraints
 
@@ -590,6 +635,10 @@ skill itself does NOT try to send Slack DMs about Slack-auth failures
 - **Auth-failure recovery is deferred to the next interactive
   session**, not retried in-process. The `REAUTH_NEEDED` sentinel is
   the handoff mechanism.
+- **Failure notifications use a fallback chain** Slack DM → Gmail email
+  → Calendar event → local sentinel — to ensure Eleanore is reachable
+  even when Slack is down. Email is sent at most once per failure
+  streak to avoid inbox spam.
 
 ## Error handling
 
