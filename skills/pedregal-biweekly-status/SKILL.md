@@ -1,20 +1,23 @@
 ---
 name: pedregal-biweekly-status
 description: >
-  Summarizes the last 2 weeks of Project Pedregal Data Platform work using the
-  standing Google Doc as the format source, Slack channels
-  #pedregal-data-platform-comms and #ask-pedregal-data-platform (blockers and
-  support), and Jira for current status. Use when Yi Jin asks for a Pedregal
-  bi-weekly update, Pedregal data platform summary, Pedregal status doc update,
-  or a past-2-weeks summary. This skill must ask Yi Jin for blockers, missing
-  context, and any Slack threads or docs that should be included before
-  finalizing.
+  Summarizes the last 2 weeks of Project Pedregal Data Platform work for an
+  executive audience, using the standing Google Doc as the format source,
+  Slack channels (#pedregal-data-platform-comms, #ask-pedregal-data-platform,
+  #pedregal-ads-dp, #pedregal-data-ml-track, #pedregal-server-side-event-poc,
+  #atlas-horizon-ingestion-blocker), the local daily Slack decision log in
+  eleanore-knowledge-base, the Daily Slack Triage canvas for blockers, and
+  Jira for current status. Use when Yi Jin asks for a Pedregal bi-weekly
+  update, Pedregal data platform summary, Pedregal status doc update, or a
+  past-2-weeks summary. This skill must ask Yi Jin for blockers, missing
+  context, named DRIs, and any Slack threads, PRs, or docs that should be
+  included before finalizing.
 ---
 
 # Pedregal Bi-Weekly Status Update
 
-Prepare a Data Platform summary for the past 14 days, grounded in source links and
-reviewed with Yi Jin before any Google Doc write.
+Prepare an **executive-level** Data Platform summary for the past 14 days,
+grounded in source links and reviewed with Yi Jin before any Google Doc write.
 
 ## Key references
 
@@ -24,41 +27,52 @@ reviewed with Yi Jin before any Google Doc write.
   ([Matan's Pedregal Review](https://docs.google.com/document/d/1EiB37iGEQpxVF7HDSXQt0H1CVVa3IHigjXz3GHgTzF8/edit?tab=t.0))
 - **Final doc** (write only after explicit approval): `1S5N4MZjzuKr4s94heI2bjS2cIJdISwl93tDit8ip2ec`, latest-dated tab
   ([Pedregal Foundations Decisions & Updates](https://docs.google.com/document/d/1S5N4MZjzuKr4s94heI2bjS2cIJdISwl93tDit8ip2ec))
-- Slack channel: `#pedregal-data-platform-comms`
 - Jira plan URL: `https://doordash.atlassian.net/jira/plans/10017/scenarios/10224/timeline?vid=12892`
 - Coverage window: last 14 days unless Yi Jin asks for a different range
+- Local knowledge base: `~/Projects/eleanore-knowledge-base/raw/`
+  - `daily-slack-summary/<YYYY-MM-DD>.md` — daily Slack decision log (one file per day)
+  - `slack-messages/*.md` — deeper thread captures
+  - `granola-notes/*.md` — meeting notes with decisions and action items
 
 ## Required behavior
 
-- Always read the Google Doc first to learn the current format before drafting.
-- Always collect both Slack and Jira evidence.
-- Always keep source links for every important point.
-- Always ask Yi Jin for blockers, missing context, and pointers to any threads,
-  tickets, or docs that should be included.
-- Never write to the Google Doc without showing a preview and getting explicit
-  confirmation first.
+- Always read the Google Doc **Data Platform** section first to learn the current
+  sub-workstream format before drafting.
+- Always collect Slack, local knowledge-base, Canvas, Jira, and (where relevant)
+  GitHub PR evidence. Cross-check Jira against Slack when a Slack announcement
+  references a specific epic or ticket.
+- Always ask Yi Jin for blockers, missing context, named DRIs, and pointers to
+  any Slack threads, PRs, or docs to include.
+- Never write to either Google Doc (staging or final) without showing a preview
+  and getting explicit confirmation first.
 
 ## Workflow
 
-### 1. Ask for user context first
+### 1. Ask Yi Jin for context first
 
-Start by asking Yi Jin for any context that will not reliably appear in Slack or Jira:
+Start every run by asking for context that won't reliably appear in Slack or Jira:
 
-- Any blockers or risks that should be called out
-- Any Slack threads, Jira tickets, docs, or meeting notes to include
-- Whether she wants only a draft in chat or also wants the Google Doc updated after review
+- Any blockers, risks, or decisions to call out.
+- Named DRIs and timelines for those blockers (the default is no names in the
+  written doc, but if Yi Jin supplies a DRI, include the first name).
+- Any Slack threads, GitHub PRs, Jira tickets, docs, or meeting notes to
+  reference.
+- Whether she wants only a draft in chat, or the Google Doc updated after
+  review.
 
-If she provides links or ticket IDs, keep them and incorporate them into the source set.
+If she provides links or ticket IDs, keep them and fold them into the source set.
 
 ### 2. Read the reference doc format
 
-Use the `googleDoc` MCP to read the format reference doc (read only — do not write here):
+Use the `googleDoc` MCP to read the format reference doc (read only — do not
+write here):
 
-1. List tabs to identify the latest-dated one:
-   - `googleDoc` action `listTabs`, documentId `1S5N4MZjzuKr4s94heI2bjS2cIJdISwl93tDit8ip2ec`
-   - Pick the tab with the most recent date (currently Tab 2: "April 1, 2026", ID `t.3ca9bdm8t79d`)
+1. List tabs and pick the latest-dated one:
+   - `googleDoc` action `listTabs`, documentId `1S5N4MZjzuKr4s94heI2bjS2cIJdISwl93tDit8ip2ec`.
+   - Pick the tab with the most recent date.
 2. Read the `Data Platform` section from that tab:
-   - `googleDoc` action `read`, documentId `1S5N4MZjzuKr4s94heI2bjS2cIJdISwl93tDit8ip2ec`, tabId `<latest tab ID>`, format `markdown`
+   - `googleDoc` action `read`, documentId `1S5N4MZjzuKr4s94heI2bjS2cIJdISwl93tDit8ip2ec`,
+     tabId `<latest tab ID>`, format `markdown`.
 
 If the MCP returns permission denied, fall back to the local OAuth script:
 
@@ -67,209 +81,277 @@ python3 skills/google-docs/scripts/fetch_doc.py \
   1S5N4MZjzuKr4s94heI2bjS2cIJdISwl93tDit8ip2ec /tmp/pedregal-status-doc.md
 ```
 
-The confirmed section structure is:
-- **Status against H1 Goals:** 🟢/🟡/🔴 [one-line summary]
-- **Key Wins & customer value shipped :**
-- **Top Risk/Blocker:**
-- **Key Decision:**
-- **Link **to a more detailed tracker (if any) :**
+The confirmed Data Platform section structure is a **sub-workstream tree**:
 
-The section also contains a `Eleanore | generated by agent skill` marker on the first line after
-the heading. Preserve this marker when writing.
+- `Status against H1 Goals:` 🟢/🟡/🔴
+- `Key Wins:` followed by one block per sub-workstream:
+  - `🟢/🟡/🔴` **Workstream name**
+  - `H1 Goals:` verbatim canonical text (see section 3 below)
+  - `Deliverables:` one-line outcomes shipped this cycle
+- `Top Risk/Blocker:` one block per blocker with `Mitigation:` line
+- `Key Decision:` one block per decision
+- `Link to a more detailed tracker (if any):` JIRA plan link
 
-Do not include Slack or Jira URLs in the written doc content. Keep them as internal
-evidence during drafting only.
+Preserve the `Eleanore | generated by agent skill` marker on the first line
+after the heading when writing.
 
-To identify the latest tab ID programmatically if needed:
+To identify the latest tab ID programmatically:
 ```python
 service.documents().get(documentId=DOC_ID, includeTabsContent=True)
 # tabs[i].tabProperties.tabId and .title
 ```
 
-### 3. Gather Slack evidence
+### 3. Canonical sub-workstreams and H1 Goals
 
-Search the following channels for the last 14 days. Prefer several targeted searches over one broad search.
+These **H1 Goals are pinned verbatim** — they do not regenerate each cycle.
+When drafting, copy them exactly. Update this list only when the reference doc
+itself changes the canonical H1 Goals text.
 
-**Primary channel:** `#pedregal-data-platform-comms` (ID: `C0AKD25LHTR`)
+Include a sub-workstream block only if there is **new landed content this
+cycle** for it. Omit workstreams with no new deliverables — do not write
+placeholder bullets like "no new launches this cycle".
 
-**Additional channels to always check:**
-- `#ask-pedregal-data-platform` (ID: `C0ADFBVEQ86`) — support and **blocker signal**;
-  run several targeted searches over the same 14-day window as comms (e.g.
-  `blocked`, `blocker`, `not working`, `failed`, `DCP`, `apply`, `urgent`,
-  `help`). Prefer `slack_search_public_and_private` with `in:<#C0ADFBVEQ86>`
-  plus `after:YYYY-MM-DD`, or `slack_read_channel` when threads are hard to
-  discover from search alone.
-- `#pedregal-server-side-event-poc` (ID: `C0ADRL55KAT`) — server-side event stitching POC weekly updates; read with `slack_read_channel` to get the latest weekly status message
-- `#pedregal-data-ml-track` (ID: `C08Q1G5C55Y`) — ML logging and MLP coordination; search for timeline and milestone updates
+| Workstream | H1 Goals (verbatim) |
+|---|---|
+| BI/AI Platform | Execute a dual-track strategy: Consolidate BI tools tied to expiring third-party contracts while simultaneously developing a first-party, in-house BI solution (Data Portal / dashboarding Canvas). |
+| Derived Dataset | GA Derived Dataset with features that address the majority of use cases. Requires completing — multi-stage transforms, custom UDFs/Python, local PySpark dev via Spark Connect, Snowflake external asset joins, additional data quality rules and Kafka streaming support. |
+| Data Storage | Onboard Iceberg V3, complete Caspian→Iceberg migration, extend RBAC to Pedregal, launch storage playground and Datalake Lifecycle Service, and enable universal credential vendoring. |
+| Data Control Plane | Deliver playgrounds with compute, table lineage visualization, authorization and manifest groups, external assets at Public Preview, SLOs, and multiclient authoring. |
+| Data Portal | Launch the data portal to users with fully functional feature set for a comprehensive end user experience with AI native discovery, personalization, Conversational AI, strategic UX Integrations and beta-BI functionality. |
+| Data Governance | Achieve full governance coverage for Pedregal by enabling PII encryption during Horizon ingestion via Crypto Transform, bringing Runtime Field-level (RTF) capability to GA for both offline and online data, integrating external asset PII handling, migrating legacy governance into the DGS platform, and obfuscating EU data from unified Cx and Dx pipelines. |
+| External Asset | Drive External Assets and Reverse External Assets from Limited Preview to Public Preview across DWR, establish GA date confidence for both asset types and the Data Migration Agent, make skinny external assets available so downstream jobs bind to an allowed column subset, and reduce external asset onboarding time to under 1 day at P50. |
+| Data Ingestion (Horizon) | (Revised & Stretched) Advance Horizon ingestion toward GA by completing Edge, GR, and ML prediction logging ingestion; reach Taulu GA at 3hr lag time latency and progress toward 1hr incremental for CPD workloads; launch CRDB ingestion for Pedregal; stand up agentic production operations under a standardized ingestion framework. |
+| Metrics and Entity (Vantage) | Launch Preview of Vantage with define-once semantics, metric cube and entity authoring with DQ and playground support, and OPS APIs across all plugins. |
+| OTO | GA Batch ingestion to Boulder with observability for full re-build as well as incremental. Preview streaming features ingestion to Valkey, supporting realtime features. |
+| DRE | SLO monitoring for Pretzel components, DQ failure alerting, Derived Dataset perf dashboard, streaming latency/availability SLOs, EA monitoring, and DCP bot triage integration. |
+| Orchestration | Upstream dependency support, data quality check support in blocking execution, ops APIs, playground/sandbox support, and an orchestration UI. |
+| Spark Platform | Support production and ad-hoc spark use cases with internal Spark infrastructure on K8s. |
+| OLAP (Clickhouse) | Provide an OLAP solution for pedregal based on ClickHouse to support existing Pinot use cases. |
 
-Recommended query patterns for `#pedregal-data-platform-comms`:
+### 4. Gather evidence
+
+#### 4a. Local knowledge base (primary decisions source)
+
+Iterate `~/Projects/eleanore-knowledge-base/raw/daily-slack-summary/*.md`
+filenames and read every file whose date falls inside the 14-day window. Each
+file contains durable thread/DM closures with decision makers and closure
+context. If coverage is sparse (e.g. only one day), call that out to Yi Jin
+and compensate with Slack searches.
+
+Also scan `raw/slack-messages/*.md` and `raw/granola-notes/*.md` — these hold
+deeper captures for threads and meetings that need more than a one-line
+decision log entry.
+
+#### 4b. Slack (wins, releases, ongoing blockers)
+
+Primary channel: `#pedregal-data-platform-comms` (`C0AKD25LHTR`).
+
+Additional channels to always check:
+
+- `#ask-pedregal-data-platform` (`C0ADFBVEQ86`) — support and blocker signal.
+- `#pedregal-server-side-event-poc` (`C0ADRL55KAT`) — server-side event
+  stitching weekly updates.
+- `#pedregal-data-ml-track` (`C08Q1G5C55Y`) — MLP/OTO/Boulder coordination
+  and ML timeline.
+- `#pedregal-ads-dp` (`C0AU81GD55J`) — Ads platform customer discussions,
+  partition-key and unified-model coordination.
+- `#atlas-horizon-ingestion-blocker` (`C0B0AD7V492`) — active Atlas-ingestion
+  blocker thread when it's live.
+- Any project-customer channel Yi Jin flags (e.g. `#project-eradinus`
+  `C09SEC25F89` for Pedregal Phase 1 ML unblocks).
+
+Query patterns for `#pedregal-data-platform-comms`:
 
 - `in:#pedregal-data-platform-comms after:YYYY-MM-DD shipped`
-- `in:#pedregal-data-platform-comms after:YYYY-MM-DD release`
-- `in:#pedregal-data-platform-comms after:YYYY-MM-DD blocked`
-- `in:#pedregal-data-platform-comms after:YYYY-MM-DD risk`
+- `in:#pedregal-data-platform-comms after:YYYY-MM-DD "limited preview"`
+- `in:#pedregal-data-platform-comms after:YYYY-MM-DD "public preview"`
+- `in:#pedregal-data-platform-comms after:YYYY-MM-DD GA`
 - `in:#pedregal-data-platform-comms after:YYYY-MM-DD decision`
-- `in:#pedregal-data-platform-comms after:YYYY-MM-DD next sprint`
+- `in:#pedregal-data-platform-comms after:YYYY-MM-DD blocked`
 
-For each promising message:
+For each promising message: save permalink, read the thread with
+`slack_read_thread` when needed, extract only durable signal (not chatter).
 
-1. Save the permalink
-2. Read the thread if needed with `slack_read_thread`
-3. Extract only durable signal, not chatter
+Group findings into progress/releases, decisions made, upcoming next steps,
+and blockers/risks.
 
-Group findings into:
+#### 4c. Daily Slack Triage Canvas (primary blocker source)
 
-- Progress and releases
-- Decisions made
-- Upcoming next steps
-- Blockers and risks
+Find the canvas titled `Daily Slack Triage — @eleanore.jin` (creator
+`U02N4K114AK`):
 
-### 4. Gather Jira status
+- Use `slack_search_public_and_private` with
+  `query="Daily Slack Triage Canvas", content_types="files"` and pick the
+  result authored by Eleanore.
+- Read with `slack_read_canvas` using the canvas file ID.
 
-Use Jira to confirm current status and cross-check what matters most for Data Platform.
+The canvas carries Eleanore's live P0 / P1 / P2 queue. Treat every open
+Pedregal-launch-blocker item as a candidate for the Top Risk/Blocker section.
 
-Preferred approach:
+#### 4d. Jira (cross-check + additional signal)
 
-- Use `jira_search` with JQL for issues updated in the last 14 days and likely related to
-  Pedregal Data Platform
+Use `jira_search` with JQL for the last 14 days, focused on Data Platform:
 
-Good starting JQL patterns:
-
-- `updated >= -14d AND text ~ "Pedregal" ORDER BY updated DESC`
-- `updated >= -14d AND labels = pedregal ORDER BY updated DESC`
-- `project in (...) AND updated >= -14d AND summary ~ "Pedregal" ORDER BY updated DESC`
-
-Also run a focused query for recently completed epics in core Data Platform projects:
-
+- `project in (FRAMEWORKS, DMI, SPARK, DCP) AND statusCategory = Done AND updated >= -14d ORDER BY updated DESC`
 - `labels = Pedregal AND statusCategory = Done AND updated >= -14d ORDER BY updated DESC`
-- Focus on projects: `FRAMEWORKS`, `DMI`, `SPARK`, `DCP` — these are the most signal-dense
-  for Data Platform key wins
 
-If the relevant project keys or labels are unclear:
+Use Jira to confirm what Slack announced and to catch closures that did not
+get an announcement. **Do not put Jira keys or URLs in the written doc
+content** — they live only in the internal Sources section for Yi Jin.
 
-- Use the Jira plan URL as the human reference point
-- Ask Yi Jin which project key, labels, or epics are the right scope
-- Prefer confirmed epics/issues over guesswork
+#### 4e. GitHub (when a PR is the core artifact)
 
-For each item you keep, capture:
+If a Slack announcement or Yi Jin explicitly references a PR (new proto
+field, new manifest capability, new API), use the `user-github` MCP
+`get_pull_request` to confirm merge status and summary. **Do not put PR URLs
+or numbers in the written doc content** — describe the capability, not the
+PR.
 
-- Issue key (no URL in the doc)
-- Summary
-- Current status
-- Owner if relevant
-- Why it belongs in the summary
+### 5. Synthesize the update (executive register)
 
-### 5. Synthesize the update
+Produce a concise, exec-ready draft that mirrors the reference doc's
+sub-workstream format.
 
-Produce a concise draft that reflects the document's existing format. Prefer factual,
-source-backed bullets over narrative prose.
+#### 5a. Structural rules
 
-Use this section shape, which exactly matches the live doc format.
+1. **Status against H1 Goals:** one emoji + one-line overall framing.
+2. **Key Wins:** one block per sub-workstream that has new landed content.
+   Each block is:
+   - Status emoji + **Workstream name** on one paragraph.
+   - `H1 Goals:` pinned verbatim text from section 3.
+   - `Deliverables:` one or more one-line outcome bullets.
+3. **Top Risk/Blocker:** one block per blocker, each 1–2 sentences total.
+4. **Key Decision:** one block per decision, each 1–2 sentences.
+5. **Link to a more detailed tracker (if any):** JIRA plan text (exact string
+   `JIRA plan 10017 / scenario 10224 / view 12892`).
 
-**Critical format rules:**
-- No markdown bullet dashes (`-`) or list syntax — all content is plain prose paragraphs
-- Wins use emoji prefix directly: `🟢 Bold title, description` (comma after title, then plain text)
-- Blockers: plain text title followed immediately by description on the same line;
-  `Mitigation:` on the next line as its own paragraph
-- Key Decisions: plain text, one paragraph per decision
-- Section labels (`Status against H1 Goals:`, `Key Wins & customer value shipped :`,
-  `Top Risk/Blocker:`, `Key Decision:`, `Link to a more detailed tracker`) are their own
-  paragraph lines with no punctuation after the colon except a space
+#### 5b. Synthesis rules (executive register)
 
-**Indentation values:**
-- Section headers (e.g. `Top Risk/Blocker:`, `Key Wins & customer value shipped :`): `indentStart: 0pt`
-- Win items (`🟢 …`), Blocker items (`• …`), Decision items (`• …`): `indentStart: 36pt`
-- Mitigation lines: `indentStart: 36pt` **plus** a leading `\t` tab character inserted at the start of the paragraph text.
-  The tab jumps to the next tab stop (~72pt), placing mitigations visually 1 level under their parent blocker.
-  Use `googleDocEdit insertText` with `\t` at the paragraph start index (insert bottom-to-top to avoid index shifts).
+- **Only landed content goes in Deliverables.** Closed / shipped / GA /
+  Public Preview / Limited Preview only. No "in review", "90% done", "coming
+  soon", or "on track" items.
+- **Omit any sub-workstream with no new landed content** this cycle — do not
+  write placeholder bullets.
+- **One short line per Deliverable.** State the outcome or customer impact,
+  not a feature list. Combine closely related items into a single line (e.g.
+  DCP Lineage Exploration + Lineage Health = one bullet).
+- **Do not bundle unrelated Jira closures.** If only one epic is the real
+  signal, include only that one — don't aggregate every closed ticket in the
+  same project into a single "milestones closed" bullet.
+- **When including a Jira-grounded Public Preview / GA milestone, explain
+  what the milestone means** (what becomes self-serve, who can onboard,
+  what guarantees are in place) rather than just listing the ticket.
+- **Data-Governance-shaped items are usually blockers, not wins.** If the
+  only signal is an open eval, design, or decision, put it under Top
+  Risk/Blocker with the evaluation framing as the Mitigation line.
+- **Blockers + mitigations = 1–2 sentences each.** Sentence 1 = problem +
+  impact. Sentence 2 = mitigation / direction. Architecture detail stays in
+  the linked doc.
+- **When a blocker has a canonical design doc, state the doc's actual
+  proposed architecture** as the Mitigation — do not summarize as
+  "N options under evaluation" if the team has converged.
+- **Distinguish commitments from targets.** Use `committed` / `by <date>`
+  only when a team has formally owned the date. Use `working toward` /
+  `targeting` / `milestone` when the date is aspirational or a shared
+  working horizon.
+- **Executive register for Key Decisions.** Lead with the business outcome
+  and timeline, not the implementation pattern. Pattern:
+  *what was decided → who it's for / why it matters → when*. Jargon like
+  plugin names, field names, or table-per-X structures stays out of the
+  decision text; detail lives in internal tracker links.
+- **Never mention a person's name** in written doc content, **except** when
+  Yi Jin explicitly names a DRI for a blocker — in that case use first name
+  only. Project names ("Project Eradinus"), team names ("Ads team"), channel
+  names, brand names (DoorDash, Wolt, Deliveroo) are fine.
+- **Cross-reference unblocked customers by project or team name**, not by
+  person.
+- **No PR numbers, Jira ticket IDs, or GitHub URLs in the written doc
+  content.** Describe the capability, not the ticket.
+- **No raw hyperlinks in the doc content except**: (a) a specific
+  pedregal-docs / ops.doordash.team page that a customer needs, and (b) a
+  single proposal / design doc link when it is the canonical source of a
+  blocker's mitigation. Everything else goes to the internal Sources
+  section.
+- Do not include items without evidence unless Yi Jin explicitly supplies
+  them. If she supplies from memory, ask whether there is a thread, ticket,
+  or doc to cite.
+
+#### 5c. Chat-side Sources section (not written to doc)
+
+Show a separate Sources section in chat for Yi Jin's reference. Group into
+Slack, Blockers (local knowledge base + Canvas + docs), GitHub, and Jira.
+Include full permalinks there — these never go into the doc.
+
+#### 5d. Format skeleton (target output)
 
 ```
 [Date] — Data Platform Update
 Eleanore | generated by agent skill
 Status against H1 Goals: 🟡 [one-line overall framing]
-Key Wins & customer value shipped :
-🟢 [Bold win title], [one-line explanation of what launched or changed]
-🟢 [Bold win title], [one-line explanation]
-🟡 [Bold win title] [explanation for partial/in-progress item]
+Key Wins:
+
+🟢 [Workstream name]
+H1 Goals: [pinned verbatim text]
+Deliverables:
+- [One-line outcome]
+- [One-line outcome]
+
+🟢 [Next workstream name]
+H1 Goals: [pinned verbatim text]
+Deliverables:
+- [One-line outcome]
+
 Top Risk/Blocker:
-[Blocker title] — [description with context]
-Mitigation: [current path forward or interim workaround]
-[Blocker title] — [description with context]
-Mitigation: [current path forward or interim workaround]
+[Blocker title] — [problem + impact, 1 sentence].
+Mitigation: [path forward, 1 sentence, optionally with a single canonical doc link].
+
+[Next blocker title] — [problem + impact].
+Mitigation: [path forward].
+
 Key Decision:
-[Decision framing] — [description]
-[Decision framing] — [description]
+[Decision framing] — [business outcome / who it's for / timeline].
+[Next decision] — [...].
+
 Link to a more detailed tracker (if any): JIRA plan 10017 / scenario 10224 / view 12892
-
----
-
 ```
-
-The trailing `---` separator + two blank lines divides this entry from the previous one
-when the staging doc accumulates multiple runs.
-
-**Do not include Slack or Jira URLs in the doc content.** Keep them in the working draft
-for traceability only; strip them before writing to the doc.
-
-Show a separate Sources section in chat for Yi Jin's reference:
-
-```markdown
-**Sources (for reference, not written to doc)**
-- Slack: [thread 1], [thread 2]
-- Jira: [ticket 1], [ticket 2]
-```
-
-Rules for synthesis:
-
-- Do not include items without evidence unless Yi Jin explicitly supplies them
-- If Yi Jin supplies an item from memory, ask whether there is a thread, ticket, or doc
-  you should cite
-- Omit empty sections only if the doc pattern also omits them
-- Keep each bullet specific enough that a reader can understand the outcome quickly
-- For shipped wins, include a short one-line explanation of what launched, changed, or was
-  unblocked instead of listing only the item name
-- For every Top Risk/Blocker bullet, always include a **Mitigation:** sub-bullet describing
-  the current path forward or interim workaround; if no mitigation is known, write
-  "Mitigation: none identified yet — under discussion"
-- For Key Decisions, combine related infra/process changes into a single bullet — e.g.,
-  "manifests moved to Pretzel repo" and "CI reduced to <10s, CD reduced to <30s" are one item,
-  not two separate bullets
 
 ### 6. Review with Yi Jin before any write
 
 After presenting the draft, ask:
 
-`Are there any blockers, missing context, or updates I should add? If you have any Slack threads, Jira tickets, or docs I should reference, send them and I’ll fold them in.`
+> Are there any blockers, missing context, updates, named DRIs, or timelines
+> I should adjust? If you have any Slack threads, GitHub PRs, Jira tickets,
+> or docs I should reference, send them and I'll fold them in.
 
 If Yi Jin gives extra context:
 
-- Update the draft
-- Add the cited link if she provides one
-- If no link is available, label it as user-provided context and ask whether it should
-  still be included
+- Update the draft.
+- Add the cited link if she provides one.
+- If no link is available, label it as user-provided context and ask whether
+  it should still be included.
 
 Only proceed to writing after she explicitly approves the final draft.
 
 ### 7. Two-step write: staging doc → final doc
 
-#### Step 7a: Write to staging doc (no confirmation needed beyond chat approval)
+#### Step 7a: Write to staging doc (after chat approval)
 
-The staging doc is a running log — **new entries always go at the top**, so the most recent
-update is always the first thing you see.
-
-After Yi Jin approves the draft in chat:
+The staging doc is a running log — **new entries always go at the top**, so
+the most recent update is always the first thing you see.
 
 1. Show a brief preview:
-   - **Action:** prepend new entry to staging doc
-   - **Target:** `1EiB37iGEQpxVF7HDSXQt0H1CVVa3IHigjXz3GHgTzF8`, tab `t.0`
-   - **Content:** the final draft including a date header
+   - **Action:** prepend new entry to staging doc.
+   - **Target:** `1EiB37iGEQpxVF7HDSXQt0H1CVVa3IHigjXz3GHgTzF8`, tab `t.0`.
+   - **Content:** the final draft including a date header.
 2. Ask: **"Shall I write this to the staging doc for your review?"**
-3. If yes, use `googleDocEdit` MCP with `insertText` at index `1` (always index 1 to prepend):
-   - action: `insertText`
-   - documentId: `1EiB37iGEQpxVF7HDSXQt0H1CVVa3IHigjXz3GHgTzF8`
-   - tabId: `t.0`
-   - index: `1`
-   - text: the full content block, starting with the date header:
+3. If yes, use `googleDocEdit` with `insertText` at index `1` (always index
+   1 to prepend):
+   - `action: insertText`
+   - `documentId: 1EiB37iGEQpxVF7HDSXQt0H1CVVa3IHigjXz3GHgTzF8`
+   - `tabId: t.0`
+   - `index: 1`
+   - `text:` the full content block, starting with the date header:
+
      ```
      ## [Date] — Data Platform Update
      Eleanore | generated by agent skill
@@ -278,35 +360,48 @@ After Yi Jin approves the draft in chat:
      ---
 
      ```
-   - The trailing `---` separator visually divides entries from previous ones
-   - Do not include Slack or Jira URLs in the written content
-4. Apply hyperlinks to any URLs in the doc using `googleDocFormat textStyle` with `linkUrl` + `textToFind`:
-   - Always linkify `ops.doordash.team/data-control-plane` → `https://ops.doordash.team/data-control-plane`
-   - Always linkify `JIRA plan 10017 / scenario 10224 / view 12892` → `https://doordash.atlassian.net/jira/plans/10017/scenarios/10224/timeline?vid=12892`
-   - Linkify any other plain-text URLs present in the written content
-5. Share the staging doc link and ask Yi Jin to review it:
-   > "Draft is in the staging doc — please review at
+
+   - The trailing `---` separator visually divides entries.
+   - Do not include Slack, Jira, or GitHub URLs in the written content.
+4. Apply hyperlinks to any URLs that remain in the doc (only the sanctioned
+   ones from rule 5b) using `googleDocFormat textStyle` with `linkUrl` +
+   `textToFind`:
+   - Always linkify `ops.doordash.team/data-control-plane` →
+     `https://ops.doordash.team/data-control-plane`.
+   - Always linkify
+     `JIRA plan 10017 / scenario 10224 / view 12892` →
+     `https://doordash.atlassian.net/jira/plans/10017/scenarios/10224/timeline?vid=12892`.
+   - Linkify any pedregal-docs / ops.doordash.team / Google Doc URLs that
+     remain in the content.
+5. Share the staging doc link and ask Yi Jin to review:
+
+   > Draft is in the staging doc — please review at
    > https://docs.google.com/document/d/1EiB37iGEQpxVF7HDSXQt0H1CVVa3IHigjXz3GHgTzF8/edit?tab=t.0
-   > Let me know when you're ready to publish to the final doc, or if you want changes first."
+   > Let me know when you're ready to publish to the final doc, or if you
+   > want changes first.
 
 #### Step 7b: Write to final doc only after explicit approval
 
-Only proceed here when Yi Jin explicitly says "looks good", "publish it", "write to the main doc", or similar.
+Only proceed when Yi Jin explicitly says "looks good", "publish it", "write
+to the main doc", or similar.
 
 1. Show a final confirmation prompt:
-   - **Action:** publish to the Pedregal Foundations Decisions & Updates doc
-   - **Target:** `1S5N4MZjzuKr4s94heI2bjS2cIJdISwl93tDit8ip2ec`, latest-dated tab (`Data Platform` section)
-   - **Content:** same content as the staging doc (or updated version if Yi Jin made edits)
-2. Ask: **"Confirmed — write this to the final Pedregal status doc?"** and wait for explicit yes.
-3. If approved, use `googleDocEdit` MCP:
-   - action: `insertText` or `append` targeting the `Data Platform` section
-   - documentId: `1S5N4MZjzuKr4s94heI2bjS2cIJdISwl93tDit8ip2ec`
-   - tabId: latest tab ID (from step 2 of the workflow)
-   - Preserve the `Eleanore | generated by agent skill` marker in the section
-   - Do not include Slack or Jira URLs in the written content
+   - **Action:** publish to the Pedregal Foundations Decisions & Updates doc.
+   - **Target:** `1S5N4MZjzuKr4s94heI2bjS2cIJdISwl93tDit8ip2ec`, latest-dated
+     tab, `Data Platform` section.
+   - **Content:** same as the staging doc (with any edits Yi Jin made).
+2. Ask: **"Confirmed — write this to the final Pedregal status doc?"** and
+   wait for an explicit yes.
+3. If approved, use `googleDocEdit`:
+   - `action: insertText` or `append` targeting the `Data Platform` section.
+   - `documentId: 1S5N4MZjzuKr4s94heI2bjS2cIJdISwl93tDit8ip2ec`
+   - `tabId:` latest tab ID (from step 2 of the workflow).
+   - Preserve the `Eleanore | generated by agent skill` marker in the section.
+   - Do not include Slack, Jira, or GitHub URLs in the written content.
 4. Confirm success with the doc link.
 
 If any MCP write fails, fall back to the local OAuth script:
+
 ```bash
 # Staging doc
 python3 skills/google-docs/scripts/update_doc.py \
@@ -320,13 +415,51 @@ python3 skills/google-docs/scripts/update_doc.py \
 
 If both fail, leave the final markdown in chat for Yi Jin to paste manually.
 
+## Google Doc formatting (when writing)
+
+**Critical format rules for the live doc:**
+
+- No markdown bullet dashes (`-`) or list syntax in the doc body — all content
+  is plain prose paragraphs.
+- Wins use emoji prefix directly: `🟢 Bold workstream name` on its own
+  paragraph, then `H1 Goals:` paragraph, then `Deliverables:` paragraph, then
+  each deliverable as its own paragraph.
+- Blockers: plain text title followed immediately by description on the same
+  line; `Mitigation:` on the next line as its own paragraph.
+- Key Decisions: plain text, one paragraph per decision.
+- Section labels (`Status against H1 Goals:`, `Key Wins:`, `Top Risk/Blocker:`,
+  `Key Decision:`, `Link to a more detailed tracker`) are their own paragraph
+  lines with no punctuation after the colon except a space.
+
+**Indentation values:**
+
+- Section headers (e.g. `Top Risk/Blocker:`, `Key Wins:`): `indentStart: 0pt`.
+- Workstream status paragraphs (`🟢 Workstream`), win items, blocker items,
+  decision items: `indentStart: 36pt`.
+- `H1 Goals:` and `Deliverables:` labels under a workstream: `indentStart: 36pt`.
+- Individual Deliverable lines under a workstream: `indentStart: 36pt` plus a
+  leading `\t` tab character.
+- Mitigation lines: `indentStart: 36pt` plus a leading `\t` tab character.
+  The tab jumps to the next tab stop (~72pt), placing mitigations visually one
+  level under their parent blocker. Use `googleDocEdit insertText` with `\t`
+  at the paragraph start index (insert bottom-to-top to avoid index shifts).
+
 ## Error handling
 
-- `googleDoc` MCP returns permission denied: fall back to local OAuth script
-  `skills/google-docs/scripts/fetch_doc.py` to read, and `update_doc.py` to write
-- DM group threads show only the opener via `slack_read_thread`: use `slack_read_channel`
-  with the channel ID to get the full conversation history
-- Slack searches are sparse: widen to 21 days and run narrower keyword searches
-- Jira scope is unclear: ask Yi Jin for the project key, labels, epic IDs, or ticket links
-- Slack and Jira disagree: prefer the most recent explicit status and call out the conflict
-- No blockers found: still ask Yi Jin whether there are off-thread blockers to include
+- `googleDoc` MCP returns permission denied: fall back to the local OAuth
+  scripts at `skills/google-docs/scripts/fetch_doc.py` and `update_doc.py`.
+- DM group threads show only the opener via `slack_read_thread`: use
+  `slack_read_channel` with the channel ID to get the full conversation.
+- Slack searches are sparse: widen to 21 days and run narrower keyword
+  searches.
+- Local `daily-slack-summary/` has only partial coverage for the window: call
+  it out to Yi Jin and lean harder on Slack searches + the Daily Slack Triage
+  Canvas.
+- Jira scope is unclear: ask Yi Jin for the project key, labels, epic IDs, or
+  ticket links.
+- Slack and Jira disagree: prefer the most recent explicit status and call
+  out the conflict to Yi Jin.
+- No blockers found: still ask Yi Jin whether there are off-thread blockers
+  to include (there usually are).
+- `user-slack` or `user-jira` MCP is not authenticated: call `mcp_auth` on the
+  server first.
