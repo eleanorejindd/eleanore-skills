@@ -441,9 +441,9 @@ the skill does NOT write to local disk.
 
 <one-line run summary: N threads, M DMs captured>
 
-## <channel-or-dm-name> — <short thread topic>
+## <short thread topic>
 
-[Slack thread](<slack permalink>)
+#<channel-or-dm-name> — [Slack thread](<slack permalink>)
 
 - **Problem:** <1-3 sentences: what was being asked, what was stuck, what
   triggered the thread>
@@ -459,9 +459,10 @@ the skill does NOT write to local disk.
 ...
 ```
 
-**Layout note:** the Slack thread link sits on its own line directly under
-the title — it is not a bullet. The `Problem` / `Decision / Conclusion` /
-`Decision makers` / `Closure type` bullets follow.
+**Layout note:** the heading is the thread topic alone (no channel
+prefix). The next line carries the channel name and the Slack thread
+link. The `Problem` / `Decision / Conclusion` / `Decision makers` /
+`Closure type` bullets follow.
 
 **How to fill each field:**
 
